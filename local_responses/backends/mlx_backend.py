@@ -113,7 +113,8 @@ class MLXBackend:
             try:
                 for chunk in stream_generate(self._model, self._tokenizer, prompt, **kwargs):
                     delta = getattr(chunk, "text", "") or ""
-                    queue_put = StreamChunk(delta=delta, raw=chunk)
+                    finish_reason = getattr(chunk, "finish_reason", None)
+                    queue_put = StreamChunk(delta=delta, raw=chunk, finish_reason=finish_reason)
                     loop.call_soon_threadsafe(queue.put_nowait, queue_put)
             except Exception as exc:  # pragma: no cover - depends on runtime errors
                 loop.call_soon_threadsafe(queue.put_nowait, exc)
