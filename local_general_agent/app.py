@@ -24,11 +24,14 @@ from agents import (
     SQLiteSession,
     ToolCallItem,
     ToolCallOutputItem,
+    function_tool,
     set_default_openai_client,
 )
 from agents.extensions.handoff_prompt import prompt_with_handoff_instructions
 from openai import AsyncOpenAI
 from openai.types.responses import ResponseTextDeltaEvent
+from pydantic import ValidationError
+from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import VerticalScroll
@@ -42,6 +45,12 @@ from .config import AppConfig, load_config, load_settings_dict, save_config
 from .shell_agent import create_shell_agent
 from .settings_agent import create_settings_agent
 from .theme import DEFAULT_THEME, available_themes, get_theme_path
+from .tools.universal_search import (
+    UniversalInputs,
+    SearchSettings,
+    SearchToolError,
+    perform_universal_search,
+)
 
 
 ActionHandler = Callable[["TerminalApp", "MenuScreen"], None]
@@ -64,6 +73,27 @@ SESSION_FILE = Path(__file__).resolve().parent.parent / "local_responses.db"
 SESSION_ID = os.environ.get("LOCAL_RESPONSES_SESSION_ID", "terminal-app-session")
 SPINNER_FRAMES: tuple[str, ...] = ("|", "/", "-", "\\")
 CONTEXT_WINDOW_PRESETS: tuple[int, ...] = (8_192, 16_384, 32_768)
+
+SEARCH_PROVIDER_LABELS: dict[str, str] = {
+    "google_cse": "Google Programmable Search",
+    "serpapi_google": "SerpAPI (Google)",
+    "brave": "Brave Search",
+}
+
+SEARCH_PROVIDER_CREDENTIALS: dict[str, list[tuple[str, str]]] = {
+    "google_cse": [
+        ("GOOGLE_CSE_API_KEY", "Google API Key"),
+        ("GOOGLE_CSE_CX", "Search Engine ID (cx)"),
+    ],
+    "serpapi_google": [
+        ("SERPAPI_API_KEY", "SerpAPI API Key"),
+    ],
+    "brave": [
+        ("BRAVE_SEARCH_API_KEY", "Brave API Key"),
+    ],
+}
+
+SEARCH_TEST_QUERY = "textual terminal agent connectivity"
 
 
 @dataclass
@@ -164,6 +194,56 @@ class MenuScreen(Screen):
         self.app.pop_screen()
 
 
+class TextPromptScreen(Screen):
+    """Modal screen that captures a line of user input."""
+
+    BINDINGS = [
+        Binding("escape", "dismiss", "Cancel"),
+    ]
+
+    def __init__(
+        self,
+        title: str,
+        instructions: str,
+        on_submit: Callable[[str], bool | None],
+        *,
+        password: bool = True,
+    ):
+        super().__init__()
+        self._title = title
+        self._instructions = instructions
+        self._on_submit = on_submit
+        self._password = password
+        self._input: Input | None = None
+
+    def compose(self) -> ComposeResult:
+        yield Static(self._title, classes="menu-title")
+        yield Static(self._instructions, classes="menu-instructions")
+        input_widget = Input(
+            password=self._password,
+            placeholder="Type value and press Enter",
+        )
+        self._input = input_widget
+        yield input_widget
+
+    def on_show(self) -> None:
+        if self._input is not None:
+            self._input.focus()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        try:
+            should_dismiss = self._on_submit(event.value)
+        except Exception as exc:  # pragma: no cover - defensive guard
+            if isinstance(self.app, TerminalApp):
+                self.app.add_message("error", str(exc))
+            return
+        if should_dismiss is not False:
+            self.app.pop_screen()
+
+    def action_dismiss(self) -> None:
+        self.app.pop_screen()
+
+
 class TerminalApp(App):
     """A terminal application with Solarized theming and slash commands."""
 
@@ -233,6 +313,12 @@ class TerminalApp(App):
             custom_output_extractor=_settings_output_extractor,
             session=self._agent_session,
         )
+        @function_tool(name_override="universal_search")
+        def _universal_search(inputs: UniversalInputs) -> dict[str, Any]:
+            return self._invoke_universal_search(inputs)
+
+        self._search_tool = _universal_search
+        self._web_search_test_status: str | None = None
         prompt_override = os.environ.get("LOCAL_RESPONSES_PROMPT")
         prompt = (
             prompt_with_handoff_instructions(prompt_override)
@@ -242,7 +328,7 @@ class TerminalApp(App):
         agent_kwargs = {
             "name": "Local Assistant",
             "instructions": prompt,
-            "tools": [self._shell_tool, self._settings_tool],
+            "tools": [self._shell_tool, self._settings_tool, self._search_tool],
             "handoffs": [self._settings_agent],
             **agent_model_kwargs,
         }
@@ -260,6 +346,9 @@ class TerminalApp(App):
         self.apply_theme(self.theme_name, persist=False)
         self.query_one(Input).focus()
         self.add_message("info", "Type /commands to see available commands")
+        warning = self._search_configuration_warning()
+        if warning:
+            self.add_message("warning", warning)
         if os.environ.get("LOCAL_RESPONSES_AUTOSTART", "1") != "0":
             asyncio.create_task(self._auto_start_server())
 
@@ -642,6 +731,152 @@ class TerminalApp(App):
                 "Local responses service is not running; start it to apply the new context window.",
             )
 
+    def _search_configuration_warning(self) -> str | None:
+        search = self.config.search
+        if not search.enabled:
+            return None
+        if not search.provider:
+            return "Web search is enabled but no provider is configured. Visit /settings → Web Search to finish setup."
+        missing = [
+            display
+            for env_key, display in SEARCH_PROVIDER_CREDENTIALS.get(search.provider, [])
+            if not (search.credential(env_key) or os.environ.get(env_key))
+        ]
+        if missing:
+            joined = ", ".join(missing)
+            return (
+                "Web search is enabled but missing credentials: "
+                f"{joined}. Update them under /settings → Web Search."
+            )
+        return None
+
+    def _set_search_enabled(self, enabled: bool) -> None:
+        if self.config.search.enabled == enabled:
+            state = "enabled" if enabled else "disabled"
+            self.add_message("info", f"Web search is already {state}.")
+            return
+        self.config.search.enabled = enabled
+        save_config(self.config)
+        if enabled:
+            self.add_message("success", "Web search enabled.")
+        else:
+            self.add_message("warning", "Web search disabled.")
+            self._set_web_search_test_status(None)
+        self._refresh_menu_screens()
+        warning = self._search_configuration_warning()
+        if warning:
+            self.add_message("warning", warning)
+
+    def _set_search_provider(self, provider: str) -> None:
+        if provider not in SEARCH_PROVIDER_LABELS:
+            self.add_message("error", f"Unknown web search provider: {provider}")
+            return
+        if self.config.search.provider == provider:
+            self.add_message("info", f"Provider already set to {SEARCH_PROVIDER_LABELS[provider]}.")
+            return
+        self.config.search.provider = provider
+        save_config(self.config)
+        self.add_message("success", f"Web search provider set to {SEARCH_PROVIDER_LABELS[provider]}.")
+        self._set_web_search_test_status(None)
+        self._refresh_menu_screens()
+        warning = self._search_configuration_warning()
+        if warning:
+            self.add_message("warning", warning)
+
+    def _set_search_credential(self, env_key: str, value: str) -> None:
+        self.config.search.credentials[env_key] = value
+        save_config(self.config)
+        self._set_web_search_test_status(None)
+
+    def _clear_search_credential(self, env_key: str) -> None:
+        if env_key in self.config.search.credentials:
+            self.config.search.credentials.pop(env_key, None)
+            save_config(self.config)
+        self._set_web_search_test_status(None)
+
+    def _set_web_search_test_status(self, status: str | None) -> None:
+        self._web_search_test_status = status
+        self._refresh_menu_screens()
+
+    def _lookup_search_value(self, env_key: str) -> str | None:
+        return self.config.search.credential(env_key) or os.environ.get(env_key)
+
+    def _build_search_settings(self) -> SearchSettings:
+        search = self.config.search
+        if not search.enabled:
+            raise ValueError("Web search is disabled. Enable it in /settings → Web Search.")
+        provider = search.provider
+        if not provider:
+            raise ValueError("Select a web search provider before using web search.")
+
+        kwargs: dict[str, Any] = {"search_provider": provider}
+        if provider == "google_cse":
+            api_key = self._lookup_search_value("GOOGLE_CSE_API_KEY")
+            cx = self._lookup_search_value("GOOGLE_CSE_CX")
+            if not api_key or not cx:
+                raise ValueError("Google CSE requires an API key and Search Engine ID (cx).")
+            kwargs["google_cse_api_key"] = api_key
+            kwargs["google_cse_cx"] = cx
+        elif provider == "serpapi_google":
+            api_key = self._lookup_search_value("SERPAPI_API_KEY")
+            if not api_key:
+                raise ValueError("SerpAPI requires an API key.")
+            kwargs["serpapi_api_key"] = api_key
+        elif provider == "brave":
+            api_key = self._lookup_search_value("BRAVE_SEARCH_API_KEY")
+            if not api_key:
+                raise ValueError("Brave Search requires an API key.")
+            kwargs["brave_search_api_key"] = api_key
+        else:  # pragma: no cover - defensive guard
+            raise ValueError(f"Unsupported web search provider: {provider}")
+
+        try:
+            return SearchSettings(**kwargs)
+        except ValidationError as exc:
+            messages = "; ".join(error.get("msg", "invalid value") for error in exc.errors())
+            raise ValueError(f"Web search configuration invalid: {messages}") from exc
+        except Exception as exc:  # pragma: no cover - defensive guard
+            raise ValueError(f"Web search configuration invalid: {exc}") from exc
+
+    def _invoke_universal_search(self, inputs: UniversalInputs) -> dict[str, Any]:
+        try:
+            settings = self._build_search_settings()
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
+        try:
+            return perform_universal_search(inputs, settings=settings)
+        except SearchToolError as exc:
+            raise ValueError(exc.format()) from exc
+
+    def test_search_connection(self) -> None:
+        asyncio.create_task(self._async_test_search_connection())
+
+    async def _async_test_search_connection(self) -> None:
+        try:
+            settings = self._build_search_settings()
+        except ValueError as exc:
+            self._set_web_search_test_status("Configuration error")
+            self.add_message("error", f"Cannot test web search: {exc}")
+            return
+
+        self.add_message("info", "Testing web search connectivity…")
+        inputs = UniversalInputs(query=SEARCH_TEST_QUERY, limit=1)
+        try:
+            await asyncio.to_thread(perform_universal_search, inputs, settings=settings)
+        except SearchToolError as exc:
+            self._set_web_search_test_status(f"Failed ({exc.code})")
+            self.add_message("error", f"Web search test failed: {exc.format()}")
+            return
+        except Exception as exc:  # pragma: no cover - runtime guard
+            self._set_web_search_test_status("Failed (error)")
+            self.add_message("error", f"Web search test failed: {exc}")
+            return
+
+        label = SEARCH_PROVIDER_LABELS.get(settings.search_provider, settings.search_provider)
+        self._set_web_search_test_status("OK")
+        self.add_message("success", f"Web search connectivity verified via {label}.")
+
     def _build_server_command(self) -> list[str]:
         """Assemble the command used to launch the local responses service."""
         runner = os.environ.get("LOCAL_RESPONSES_RUNNER", "uv")
@@ -836,6 +1071,87 @@ Settings Navigation:
     def _create_settings_menu(self) -> MenuNode:
         """Build the menu tree for settings."""
 
+        def make_search_toggle_label() -> LabelFactory:
+            def label(app: "TerminalApp") -> str:
+                marker = "✓" if app.config.search.enabled else " "
+                return f"{marker} Enable Web Search"
+
+            return label
+
+        def make_search_toggle_action() -> ActionHandler:
+            def action(app: "TerminalApp", screen: MenuScreen) -> None:
+                app._set_search_enabled(not app.config.search.enabled)
+                screen.refresh_options()
+
+            return action
+
+        def provider_label(app: "TerminalApp") -> str:
+            if not app.config.search.enabled:
+                return "Provider (Enable web search to configure)"
+            summary = app._provider_summary_label()
+            return f"Provider ({summary})"
+
+        def credentials_label(app: "TerminalApp") -> str:
+            if not app.config.search.enabled:
+                return "Credentials (Enable web search to configure)"
+            return app._credentials_summary_label()
+
+        def test_label(app: "TerminalApp") -> str:
+            return app._test_connection_label()
+
+        def provider_action(app: "TerminalApp", _: MenuScreen) -> None:
+            if not app.config.search.enabled:
+                app.add_message("warning", "Enable web search before selecting a provider.")
+                return
+            app.push_screen(MenuScreen(app._build_search_provider_menu()))
+
+        def credentials_action(app: "TerminalApp", screen: MenuScreen) -> None:
+            if not app.config.search.enabled:
+                app.add_message("warning", "Enable web search before configuring credentials.")
+                return
+            provider = app.config.search.provider
+            if not provider:
+                app.add_message(
+                    "warning", "Select a web search provider before configuring credentials."
+                )
+                return
+            app.push_screen(MenuScreen(app._build_credentials_menu(provider)))
+
+        def test_action(app: "TerminalApp", _: MenuScreen) -> None:
+            if not app.config.search.enabled:
+                app.add_message("warning", "Enable web search before testing connectivity.")
+                return
+            app._set_web_search_test_status("Running…")
+            app.test_search_connection()
+
+        search_items = [
+            MenuItem(
+                id="settings:search:enabled",
+                label=make_search_toggle_label(),
+                action=make_search_toggle_action(),
+            ),
+            MenuItem(
+                id="settings:search:provider",
+                label=provider_label,
+                action=provider_action,
+            ),
+            MenuItem(
+                id="settings:search:credentials",
+                label=credentials_label,
+                action=credentials_action,
+            ),
+            MenuItem(
+                id="settings:search:test",
+                label=test_label,
+                action=test_action,
+            ),
+        ]
+
+        search_menu = MenuNode(
+            title="Web Search",
+            items=search_items,
+        )
+
         def make_theme_label(theme: str, display: str) -> LabelFactory:
             def label(app: "TerminalApp") -> str:
                 marker = "✓" if app.theme_name == theme else " "
@@ -878,6 +1194,9 @@ Settings Navigation:
                 screen.refresh_options()
 
             return action
+
+        def web_search_summary(app: "TerminalApp") -> str:
+            return app._web_search_summary_label()
 
         theme_items = [
             MenuItem(
@@ -945,12 +1264,145 @@ Settings Navigation:
                     submenu=context_menu,
                 ),
                 MenuItem(
+                    id="settings:web-search",
+                    label=web_search_summary,
+                    submenu=search_menu,
+                ),
+                MenuItem(
                     id="settings:server",
                     label=server_summary,
                     submenu=server_menu,
                 ),
             ],
         )
+
+    def _build_search_provider_menu(self) -> MenuNode:
+        items: list[MenuItem] = []
+        for provider, display in SEARCH_PROVIDER_LABELS.items():
+
+            def label_factory(provider: str = provider, display: str = display) -> LabelFactory:
+                def label(app: "TerminalApp") -> str:
+                    marker = "✓" if app.config.search.provider == provider else " "
+                    return f"{marker} {display}"
+
+                return label
+
+            def action_factory(provider: str = provider) -> ActionHandler:
+                def action(app: "TerminalApp", screen: MenuScreen) -> None:
+                    app._set_search_provider(provider)
+                    screen.refresh_options()
+                    app._refresh_menu_screens()
+
+                return action
+
+            items.append(
+                MenuItem(
+                    id=f"settings:search:provider:{provider}",
+                    label=label_factory(),
+                    action=action_factory(),
+                )
+            )
+
+        return MenuNode("Web Search Provider", items)
+
+    def _build_credentials_menu(self, provider: str) -> MenuNode:
+        entries: list[MenuItem] = []
+        for env_key, display_name in SEARCH_PROVIDER_CREDENTIALS.get(provider, []):
+
+            def label_factory(env_key: str = env_key, display_name: str = display_name) -> LabelFactory:
+                def label(app: "TerminalApp") -> str:
+                    configured = bool(
+                        app.config.search.credential(env_key) or os.environ.get(env_key)
+                    )
+                    marker = "✓" if configured else "✗"
+                    status = "Configured" if configured else "Not set"
+                    return f"{marker} {display_name} ({status})"
+
+                return label
+
+            def action_factory(env_key: str = env_key, display_name: str = display_name) -> ActionHandler:
+                def action(app: "TerminalApp", _: MenuScreen) -> None:
+                    prompt = TextPromptScreen(
+                        title=display_name,
+                        instructions=(
+                            "Paste the secret and press Enter. Leave blank to clear the stored value."
+                        ),
+                        on_submit=app._make_credential_submitter(env_key, display_name),
+                        password=True,
+                    )
+                    app.push_screen(prompt)
+
+                return action
+
+            entries.append(
+                MenuItem(
+                    id=f"settings:search:credential:{env_key}",
+                    label=label_factory(),
+                    action=action_factory(),
+                )
+            )
+
+        if not entries:
+            entries.append(
+                MenuItem(
+                    id="settings:search:credential:none",
+                    label="No credentials required for this provider.",
+                )
+            )
+
+        return MenuNode("Web Search Credentials", entries)
+
+    def _make_credential_submitter(self, env_key: str, display_name: str) -> Callable[[str], bool | None]:
+        def submit(value: str) -> bool:
+            cleaned = value.strip()
+            if cleaned:
+                self._set_search_credential(env_key, cleaned)
+                self.add_message("success", f"{display_name} saved.")
+            else:
+                self._clear_search_credential(env_key)
+                self.add_message("warning", f"{display_name} cleared.")
+            self._refresh_menu_screens()
+            return True
+
+        return submit
+
+    def _refresh_menu_screens(self) -> None:
+        for screen in self.screen_stack:
+            if isinstance(screen, MenuScreen):
+                screen.refresh_options()
+
+    def _web_search_summary_label(self) -> str:
+        search = self.config.search
+        if not search.enabled:
+            return "Web Search (Disabled)"
+        provider_label = self._provider_summary_label()
+        return f"Web Search (Enabled — {provider_label})"
+
+    def _provider_summary_label(self) -> str:
+        provider = self.config.search.provider
+        if not provider:
+            return "Provider not set"
+        return SEARCH_PROVIDER_LABELS.get(provider, provider)
+
+    def _credentials_summary_label(self) -> str:
+        provider = self.config.search.provider
+        if not provider:
+            return "Credentials (Select a provider)"
+        required = SEARCH_PROVIDER_CREDENTIALS.get(provider, [])
+        if not required:
+            return "Credentials (Not required)"
+        configured = sum(
+            1
+            for env_key, _ in required
+            if self.config.search.credential(env_key) or os.environ.get(env_key)
+        )
+        return f"Credentials ({configured}/{len(required)} configured)"
+
+    def _test_connection_label(self) -> str:
+        status = self._web_search_test_status
+        if not status:
+            return "Test Connection"
+        return f"Test Connection ({status})"
 
     def add_message(self, msg_type: str, message: str) -> Widget:
         """Add a message to the messages area."""
@@ -964,11 +1416,12 @@ Settings Navigation:
         }
         icon = icons.get(msg_type, "•")
 
-        text = f"{icon} {message}"
         if msg_type == "assistant":
-            widget: Widget = Markdown(text, classes=msg_type)
+            text = f"{icon} {message}"
+            widget = Markdown(text, classes=msg_type)
         else:
-            widget = Static(text, classes=msg_type)
+            safe_text = f"{icon} {escape(message)}"
+            widget = Static(safe_text, classes=msg_type)
         messages_widget = self.query_one("#messages", VerticalScroll)
         messages_widget.mount(widget)
         messages_widget.scroll_end()
