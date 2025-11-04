@@ -25,6 +25,7 @@ class StreamChunk:
 
     delta: str
     raw: Any | None = None
+    finish_reason: str | None = None
 
 
 @dataclass(slots=True)
@@ -72,6 +73,11 @@ def create_backend(name: str, **kwargs: Any) -> Backend:
         from .llamacpp_backend import LlamaCppBackend
 
         return LlamaCppBackend(**kwargs)
+
+    if normalized in {"litellm", "lite_llm", "lite"}:
+        from .litellm_backend import LiteLLMBackend
+
+        return LiteLLMBackend(**kwargs)
 
     raise ValueError(f"Unknown backend: {name}")
 
