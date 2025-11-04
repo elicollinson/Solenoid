@@ -2,46 +2,114 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-BackendName = Literal["mlx_granite", "llama_cpp"]
+BackendName = Literal["mlx_granite", "llama_cpp", "litellm"]
 
 
-@dataclass
-class ModelConfig:
+class ReasoningConfig(BaseModel):
+    """Native reasoning controls for providers that expose reasoning APIs."""
+
+    effort: Literal["minimal", "low", "medium", "high"] = "low"
+    summary: Literal["off", "concise", "detailed"] = "concise"
+    budget_tokens: int | None = None
+    verbosity: Literal["low", "medium", "high"] | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ThinkingConfig(BaseModel):
+    """Anthropic Claude thinking budget controls."""
+
+    enabled: bool = False
+    budget_tokens: int = 1024
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReActConfig(BaseModel):
+    """ReAct emulation options for non-reasoning models."""
+
+    enabled: bool = False
+    max_steps: int = 4
+    observation_max_tokens: int = 1024
+    schema_strict: bool = True
+    emit_reasoning_to_client: bool = False
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ModelConfig(BaseModel):
     """Model selection and backend options."""
 
     backend: BackendName = "mlx_granite"
     model_id: str = "mlx_granite_4.0_h_tiny_4bit"
+    litellm_model: str | None = None
+    api_base: str | None = None
+    api_key_env: str | None = "OPENAI_API_KEY"
+    mode: Literal["responses", "chat_completions", "auto"] = "auto"
+    drop_params: bool = True
+    allowed_openai_params: list[str] = Field(default_factory=list)
+    additional_drop_params: list[str] = Field(default_factory=list)
+    router: bool = False
+    router_config: dict[str, Any] = Field(default_factory=dict)
+    reasoning: ReasoningConfig | None = None
+    anthropic_thinking: ThinkingConfig | None = None
+    react: ReActConfig | None = None
     max_output_tokens: int = 1024
     temperature: float = 0.7
     top_p: float = 0.9
     context_window_tokens: int = 16384
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    healthcheck: bool = False
+
+    model_config = ConfigDict(extra="allow", validate_assignment=True)
+
+    @model_validator(mode="after")
+    def _ensure_litellm_defaults(self) -> "ModelConfig":
+        if self.litellm_model is None:
+            object.__setattr__(self, "litellm_model", self.model_id)
+        return self
 
 
-@dataclass
-class DatabaseConfig:
+class DatabaseConfig(BaseModel):
     """SQLite connection settings."""
 
     path: Path = Path("local_responses.db")
-    pragmas: dict[str, str] = field(
+    pragmas: dict[str, str] = Field(
         default_factory=lambda: {
             "journal_mode": "wal",
             "synchronous": "normal",
         }
     )
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-@dataclass
-class ServiceConfig:
+
+class ServiceConfig(BaseModel):
     """Top-level application configuration."""
 
     host: str = "127.0.0.1"
     port: int = 4000
     api_key: Optional[str] = None
-    model: ModelConfig = field(default_factory=ModelConfig)
-    database: DatabaseConfig = field(default_factory=DatabaseConfig)
+    model: ModelConfig = Field(default_factory=ModelConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     enable_llama_backend: bool = False
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+__all__ = [
+    "BackendName",
+    "DatabaseConfig",
+    "ModelConfig",
+    "ReasoningConfig",
+    "ReActConfig",
+    "ServiceConfig",
+    "ThinkingConfig",
+]
