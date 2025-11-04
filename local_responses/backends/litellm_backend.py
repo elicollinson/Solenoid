@@ -1,11 +1,9 @@
 """LiteLLM-backed remote inference backend."""
 
 from __future__ import annotations
-
-import asyncio
 import logging
 import os
-from typing import Any, AsyncIterator, Iterable, Sequence
+from typing import Any, AsyncIterator, Sequence
 
 import litellm
 from litellm import Router  # type: ignore[attr-defined]
@@ -15,10 +13,39 @@ from litellm.exceptions import (  # type: ignore[attr-defined]
     UnsupportedParamsError,
 )
 
+from ..config import ModelConfig
 from . import Backend, GenerationParams, GenerationResult, StreamChunk
 
 
 LOGGER = logging.getLogger("local_responses.backends.litellm")
+SUPPORTED_PARAM_CACHE: dict[tuple[str, str | None], set[str] | None] = {}
+ALWAYS_KEEP_PARAMS: set[str] = {
+    "model",
+    "messages",
+    "input",
+    "temperature",
+    "top_p",
+    "stream",
+    "stream_options",
+    "max_tokens",
+    "max_output_tokens",
+    "stop",
+    "tools",
+    "response_format",
+    "metadata",
+    "reasoning",
+    "text",
+    "instructions",
+    "previous_response_id",
+    "parallel_tool_calls",
+    "tool_choice",
+    "user",
+    "api_key",
+    "api_base",
+    "custom_llm_provider",
+    "cache_control",
+    "thinking",
+}
 
 
 class LiteLLMBackend(Backend):
@@ -26,36 +53,24 @@ class LiteLLMBackend(Backend):
 
     name = "litellm"
 
-    def __init__(
-        self,
-        *,
-        model: str | None = None,
-        litellm_model: str | None = None,
-        api_key_env: str | None = "OPENAI_API_KEY",
-        api_base: str | None = None,
-        mode: str = "auto",
-        drop_params: bool = True,
-        allowed_openai_params: Iterable[str] | None = None,
-        additional_drop_params: Iterable[str] | None = None,
-        router: bool = False,
-        router_config: dict[str, Any] | None = None,
-        healthcheck: bool = False,
-    ) -> None:
-        self.model_id = model or litellm_model or "litellm"
-        self.litellm_model = litellm_model or model or "gpt-4o-mini"
-        self.api_base = api_base
-        self.api_key_env = api_key_env or "OPENAI_API_KEY"
-        self.mode = mode
-        self.drop_params = drop_params
-        self.allowed_openai_params = tuple(allowed_openai_params or ())
-        self.additional_drop_params = tuple(additional_drop_params or ())
-        self.router_enabled = router
-        self.router_config = dict(router_config or {})
-        self.healthcheck_enabled = healthcheck
+    def __init__(self, *, model_config: ModelConfig) -> None:
+        self._cfg = model_config
+        self.model_id = model_config.model_id
+        self.litellm_model = model_config.litellm_model or model_config.model_id
+        self.api_base = model_config.api_base
+        self.api_key_env = model_config.api_key_env or "OPENAI_API_KEY"
+        self.mode = model_config.mode
+        self.drop_params = model_config.drop_params
+        self.allowed_openai_params = tuple(model_config.allowed_openai_params)
+        self.additional_drop_params = tuple(model_config.additional_drop_params)
+        self.router_enabled = model_config.router
+        self.router_config = dict(model_config.router_config)
+        self.healthcheck_enabled = model_config.healthcheck
 
         self._ready = False
         self._router: Router | None = None
         self._last_bridge: bool = False
+        self._provider_hint = self._detect_provider()
 
     def supports_json_schema(self) -> bool:
         """LiteLLM forwards JSON schema constraints where supported."""
@@ -83,7 +98,6 @@ class LiteLLMBackend(Backend):
                 **self.router_config,
             )
 
-        # Optional zero-token health check.
         if self.healthcheck_enabled:
             try:
                 await self._perform_healthcheck(api_key)
@@ -140,11 +154,39 @@ class LiteLLMBackend(Backend):
     def _resolve_api_key(self) -> str | None:
         return os.environ.get(self.api_key_env) if self.api_key_env else None
 
+    def _detect_provider(self) -> str | None:
+        try:
+            return litellm.get_llm_provider(model=self.litellm_model)
+        except Exception:  # pragma: no cover - defensive best effort
+            return None
+
     def _base_litellm_params(self, api_key: str) -> dict[str, Any]:
         params: dict[str, Any] = {"model": self.litellm_model, "api_key": api_key}
         if self.api_base:
             params["api_base"] = self.api_base
+        if self._provider_hint:
+            params["custom_llm_provider"] = self._provider_hint
         return params
+
+    def _get_supported_params(self) -> set[str] | None:
+        cache_key = (self.litellm_model, self._provider_hint)
+        if cache_key in SUPPORTED_PARAM_CACHE:
+            return SUPPORTED_PARAM_CACHE[cache_key]
+
+        try:
+            supported = litellm.get_supported_openai_params(
+                model=self.litellm_model,
+                custom_llm_provider=self._provider_hint,
+            )
+            if supported is None:
+                SUPPORTED_PARAM_CACHE[cache_key] = None
+            else:
+                SUPPORTED_PARAM_CACHE[cache_key] = {param for param in supported if isinstance(param, str)}
+        except Exception:  # pragma: no cover - provider introspection is best effort
+            LOGGER.debug("Failed to discover supported params", exc_info=True)
+            SUPPORTED_PARAM_CACHE[cache_key] = None
+
+        return SUPPORTED_PARAM_CACHE[cache_key]
 
     def _build_payload(
         self,
@@ -182,10 +224,10 @@ class LiteLLMBackend(Backend):
 
     def _convert_message_for_chat(self, message: dict[str, Any]) -> dict[str, Any]:
         role = message.get("role", "user")
-        content = message.get("content", "")
-        if isinstance(content, str):
-            return {"role": role, "content": content, **({"tool_call_id": message["tool_call_id"]} if "tool_call_id" in message else {})}
-        return {"role": role, "content": content, **({"tool_call_id": message["tool_call_id"]} if "tool_call_id" in message else {})}
+        payload: dict[str, Any] = {"role": role, "content": message.get("content", "")}
+        if "tool_call_id" in message:
+            payload["tool_call_id"] = message["tool_call_id"]
+        return payload
 
     def _convert_message_for_response(self, message: dict[str, Any]) -> dict[str, Any]:
         role = message.get("role", "user")
@@ -249,6 +291,38 @@ class LiteLLMBackend(Backend):
             return await self._router.acompletion(**params)
         return await litellm.acompletion(**params)
 
+    def _filtered_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        filtered: dict[str, Any] = {}
+        supported = self._get_supported_params() if self.drop_params else None
+        passthrough = set(self.allowed_openai_params)
+        forced_drop = set(self.additional_drop_params)
+
+        for key, value in kwargs.items():
+            if value is None:
+                continue
+            if key in forced_drop:
+                continue
+            if key in ALWAYS_KEEP_PARAMS or key.startswith("litellm_"):
+                filtered[key] = value
+                continue
+            if key in passthrough:
+                filtered[key] = value
+                continue
+            if supported is None or not self.drop_params:
+                filtered[key] = value
+                continue
+            if key in supported:
+                filtered[key] = value
+
+        if self.drop_params:
+            filtered["drop_params"] = True
+            if passthrough:
+                filtered["allowed_openai_params"] = sorted(passthrough)
+        elif passthrough:
+            filtered.setdefault("allowed_openai_params", sorted(passthrough))
+
+        return filtered
+
     def _payload_for_responses(self, payload: dict[str, Any], *, api_key: str, stream: bool) -> dict[str, Any]:
         args = {
             "input": payload.get("input"),
@@ -267,8 +341,10 @@ class LiteLLMBackend(Backend):
 
         if self.api_base:
             args["api_base"] = self.api_base
+        if self._provider_hint:
+            args["custom_llm_provider"] = self._provider_hint
 
-        return args
+        return self._filtered_kwargs(args)
 
     def _payload_for_chat(self, payload: dict[str, Any], *, api_key: str, stream: bool) -> dict[str, Any]:
         args = {
@@ -281,14 +357,15 @@ class LiteLLMBackend(Backend):
             "stop": payload.get("stop"),
             "stream": stream,
             "stream_options": payload.get("stream_options"),
+            "response_format": payload.get("response_format"),
             "api_key": api_key,
         }
         if self.api_base:
             args["api_base"] = self.api_base
-        if payload.get("response_format"):
-            args["response_format"] = payload["response_format"]
+        if self._provider_hint:
+            args["custom_llm_provider"] = self._provider_hint
 
-        return args
+        return self._filtered_kwargs(args)
 
     @staticmethod
     def _extract_text_delta(chunk: Any) -> str:
@@ -320,12 +397,9 @@ class LiteLLMBackend(Backend):
         if not choices:
             return None
         choice = choices[0]
-        finish_reason = None
         if isinstance(choice, dict):
-            finish_reason = choice.get("finish_reason")
-        else:
-            finish_reason = getattr(choice, "finish_reason", None)
-        return finish_reason
+            return choice.get("finish_reason")
+        return getattr(choice, "finish_reason", None)
 
     @staticmethod
     def _extract_choices(chunk: Any) -> list[Any]:
