@@ -5,6 +5,7 @@ from local_responses.config import (
     ReasoningConfig,
     ReActConfig,
     ServiceConfig,
+    TelemetryConfig,
     ThinkingConfig,
 )
 
@@ -46,3 +47,16 @@ def test_service_config_provides_isolated_lists() -> None:
 def test_service_config_embeds_model_config() -> None:
     service = ServiceConfig()
     assert isinstance(service.model, ModelConfig)
+
+
+def test_service_config_reasoning_flags_defaults() -> None:
+    service = ServiceConfig()
+    assert service.allow_reasoning_stream_to_client is False
+    assert service.include_reasoning_in_store is True
+
+
+def test_telemetry_config_defaults() -> None:
+    telemetry = TelemetryConfig()
+    assert telemetry.enabled is False
+    assert telemetry.project_name == "local-responses"
+    assert telemetry.api_key_env == "PHOENIX_API_KEY"

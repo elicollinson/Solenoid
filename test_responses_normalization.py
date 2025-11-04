@@ -1,6 +1,7 @@
 import pytest
 
 from local_responses.schemas import ResponsesRequest
+from local_responses.tool_parsing import extract_tool_calls, structured_tool_calls_to_markup
 
 
 def test_normalized_messages_accepts_response_input_items() -> None:
@@ -69,3 +70,23 @@ def test_tool_definition_accepts_legacy_shape() -> None:
     assert payload["function"]["name"] == "shell_agent"
     assert payload["function"]["parameters"]["type"] == "object"
     assert payload["strict"] is True
+
+
+def test_structured_tool_calls_round_trip() -> None:
+    calls = [
+        {
+            "id": "tool_1",
+            "type": "function",
+            "function": {"name": "lookup", "arguments": "{\"value\": 1}"},
+        }
+    ]
+
+    markup = structured_tool_calls_to_markup(calls)
+    text = f"Result:{markup}"
+    clean, parsed = extract_tool_calls(text)
+
+    assert clean == "Result:"
+    assert len(parsed) == 1
+    assert parsed[0].call_id == "tool_1"
+    assert parsed[0].name == "lookup"
+    assert parsed[0].arguments == {"value": 1}
