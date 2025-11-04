@@ -7,6 +7,7 @@ import json
 import os
 import shlex
 import subprocess
+from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, TextIO
@@ -330,8 +331,42 @@ class TerminalApp(App):
                     ("formatter", "Formatter - Text formatting tools"),
                 ],
             )
+        elif command == "log":
+            self._handle_log_command()
         else:
             self.add_message("warning", f"Unknown command: /{command}")
+
+    def _handle_log_command(self) -> None:
+        """Write the current session transcript to a timestamped log file."""
+        if not self.messages:
+            self.add_message("warning", "No session messages to save.")
+            return
+
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        filename = f"log-{timestamp}.txt"
+        log_path = self._workspace_root / filename
+
+        icons = {
+            "success": "✓",
+            "error": "✗",
+            "warning": "⚠",
+            "info": "ℹ",
+            "assistant": getattr(self, "_assistant_icon", "<"),
+            "user": getattr(self, "_user_icon", ">"),
+        }
+
+        lines = []
+        for msg_type, message in self.messages:
+            icon = icons.get(msg_type, "•")
+            lines.append(f"{icon} {message}")
+
+        try:
+            log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        except OSError as exc:  # pragma: no cover - filesystem errors
+            self.add_message("error", f"Failed to write log: {exc}")
+            return
+
+        self.add_message("success", f"Session saved to {filename}")
 
     def _handle_model_request(self, prompt: str) -> None:
         """Route plain text input to the local responses service."""
@@ -763,6 +798,7 @@ Built-in Commands:
   /theme [name]  - Toggle theme or switch to a specific theme ({available})
   /clear         - Clear messages
   /commands      - List all commands
+  /log           - Save current session to a timestamped log file
 
 Menu Commands:
   /settings      - Configure application settings
