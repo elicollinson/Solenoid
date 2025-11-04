@@ -260,6 +260,10 @@ class ResponseUsage(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    reasoning_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    response_cost: float | None = None
 
 
 class ResponseOutputMessage(BaseModel):
@@ -296,6 +300,12 @@ class ResponsePayload(BaseModel):
     response_format: ResponseFormat | None = None
     instructions: str | None = None
     metadata: dict[str, Any] | None = None
+    tool_calls: list[dict[str, Any]] | None = None
+    debug: dict[str, Any] | None = None
+    upstream_response_id: str | None = None
+    upstream_model: str | None = None
+    upstream_provider: str | None = None
+    bridged_endpoint: bool = False
 
 
 __all__ = [

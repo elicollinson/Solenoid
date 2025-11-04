@@ -26,6 +26,12 @@ class StreamChunk:
     delta: str
     raw: Any | None = None
     finish_reason: str | None = None
+    reasoning_delta: str | None = None
+    tool_calls: Sequence[dict[str, Any]] | None = None
+    usage: dict[str, Any] | None = None
+    response_id: str | None = None
+    provider: str | None = None
+    model: str | None = None
 
 
 @dataclass(slots=True)
@@ -35,6 +41,13 @@ class GenerationResult:
     text: str
     finish_reason: str | None = None
     raw: Any | None = None
+    reasoning: str | None = None
+    tool_calls: Sequence[dict[str, Any]] | None = None
+    usage: dict[str, Any] | None = None
+    response_id: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    bridged_endpoint: bool = False
 
 
 class Backend(Protocol):

@@ -100,8 +100,27 @@ class ServiceConfig(BaseModel):
     model: ModelConfig = Field(default_factory=ModelConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     enable_llama_backend: bool = False
+    allow_reasoning_stream_to_client: bool = False
+    include_reasoning_in_store: bool = True
+    telemetry: "TelemetryConfig" = Field(default_factory=lambda: TelemetryConfig())
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+class TelemetryConfig(BaseModel):
+    """Phoenix telemetry configuration."""
+
+    enabled: bool = False
+    project_name: str = "local-responses"
+    endpoint: str | None = None
+    protocol: Literal["http/protobuf", "grpc"] | None = None
+    batch: bool = True
+    auto_instrument: bool = False
+    verbose: bool = False
+    api_key_env: str | None = "PHOENIX_API_KEY"
+    headers: dict[str, str] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="allow")
 
 
 __all__ = [
@@ -112,4 +131,5 @@ __all__ = [
     "ReActConfig",
     "ServiceConfig",
     "ThinkingConfig",
+    "TelemetryConfig",
 ]
