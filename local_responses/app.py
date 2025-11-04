@@ -66,7 +66,10 @@ class ServiceState:
     def __init__(self, config: ServiceConfig) -> None:
         self.config = config
         self.store = ConversationStore(config.database.path)
-        self.backend = create_backend(config.model.backend)
+        backend_kwargs: dict[str, Any] = {}
+        if config.model.backend == "litellm":
+            backend_kwargs["model_config"] = config.model
+        self.backend = create_backend(config.model.backend, **backend_kwargs)
         self.context_manager = ContextWindowManager(config.model.context_window_tokens)
         self.default_system_prompt = _load_default_prompt()
         self.logger = LOGGER

@@ -77,7 +77,10 @@ def create_backend(name: str, **kwargs: Any) -> Backend:
     if normalized in {"litellm", "lite_llm", "lite"}:
         from .litellm_backend import LiteLLMBackend
 
-        return LiteLLMBackend(**kwargs)
+        model_config = kwargs.get("model_config")
+        if model_config is None:
+            raise ValueError("LiteLLM backend requires a model_config instance")
+        return LiteLLMBackend(model_config=model_config)
 
     raise ValueError(f"Unknown backend: {name}")
 
