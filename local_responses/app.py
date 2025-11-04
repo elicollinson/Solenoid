@@ -221,7 +221,7 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
 
         conversation_id = state.store.ensure_conversation(conversation_id)
 
-        tools_payload = [tool.model_dump(mode="json") for tool in req.tools] if req.tools else None
+        tools_payload = [tool.as_openai_tool() for tool in req.tools] if req.tools else None
         prompt_messages, _ = await prepare_prompt(
             state,
             req,
