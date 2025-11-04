@@ -1,0 +1,209 @@
+/* Solarized Light Theme for Textual */
+
+/* Solarized Light Colors */
+$background: #fdf6e3;
+$background-darken-1: #eee8d5;
+$foreground: #657b83;
+$foreground-muted: #93a1a1;
+$foreground-bright: #586e75;
+
+$yellow: #b58900;
+$orange: #cb4b16;
+$red: #dc322f;
+$magenta: #d33682;
+$violet: #6c71c4;
+$blue: #268bd2;
+$cyan: #2aa198;
+$green: #859900;
+
+/* Main screen styling */
+Screen {
+    background: $background;
+    color: $foreground;
+}
+
+/* Input widget with border */
+Input {
+    border: round $foreground-muted;
+    background: $background-darken-1;
+    color: $foreground;
+    margin: 0 1;
+    padding: 0 1;
+}
+
+Input:focus {
+    border: round $blue;
+}
+
+/* Static text widgets */
+Static {
+    background: $background;
+    color: $foreground;
+}
+
+.assistant {
+    background: $background;
+    color: $foreground;
+}
+
+.success {
+    color: $green;
+}
+
+.error {
+    color: $red;
+}
+
+.warning {
+    color: $yellow;
+}
+
+.info {
+    color: $blue;
+}
+
+.command {
+    color: $magenta;
+}
+
+/* Container styling */
+Container {
+    background: $background;
+}
+
+/* Header and Footer */
+Header {
+    background: $background-darken-1;
+    color: $foreground-bright;
+}
+
+Footer {
+    background: $background-darken-1;
+    color: $foreground-muted;
+}
+
+/* Message area */
+#messages {
+    height: 1fr;
+    background: $background;
+    color: $foreground;
+    padding: 1 2;
+}
+
+/* Welcome message */
+#welcome {
+    text-align: center;
+    color: $cyan;
+    padding: 1;
+}
+
+/* Menu screens */
+.menu-screen {
+    background: $background;
+}
+
+.menu-title {
+    text-align: center;
+    color: $cyan;
+    text-style: bold;
+    padding: 1;
+}
+
+.menu-instructions {
+    color: $foreground-muted;
+    padding: 0 2;
+}
+
+.menu-item {
+    color: $foreground;
+    padding: 0 2;
+}
+
+.menu-item:hover {
+    background: $background-darken-1;
+    color: $foreground-bright;
+}
+
+/* Button styling */
+Button {
+    border: round $foreground-muted;
+    background: $background-darken-1;
+    color: $foreground;
+}
+
+Button:hover {
+    border: round $blue;
+    background: $background-darken-1;
+    color: $blue;
+}
+
+Button:focus {
+    border: round $cyan;
+}
+
+/* List items */
+ListItem {
+    background: $background;
+    color: $foreground;
+}
+
+ListItem:hover {
+    background: $background-darken-1;
+    color: $foreground-bright;
+}
+
+OptionList {
+    border: round $foreground-muted;
+    background: $background;
+}
+
+OptionList:focus {
+    border: round $blue;
+}
+
+OptionList > .option-list--option {
+    color: $foreground;
+}
+
+OptionList > .option-list--option-highlighted {
+    background: $background-darken-1;
+    color: $cyan;
+}
+
+Markdown.assistant {
+    border-left: heavy $blue;
+    padding: 0 1;
+}
+
+Markdown.assistant .markdown-inline-code {
+    background: $background-darken-1;
+    color: $orange;
+    padding: 0 1;
+    border: round $foreground-muted;
+}
+
+Markdown.assistant .markdown-code-block {
+    background: $background-darken-1;
+    border: round $foreground-muted;
+    color: $foreground;
+    padding: 0 1;
+}
+
+Markdown.assistant .markdown-strong {
+    color: $foreground-bright;
+}
+
+Markdown.assistant .markdown-emphasis {
+    color: $magenta;
+}
+
+Markdown.assistant .markdown-block-quote {
+    border-left: round $violet;
+    color: $foreground-muted;
+    padding: 0 1;
+}
+
+Markdown.assistant .markdown-link {
+    color: $blue;
+    text-style: underline;
+}
