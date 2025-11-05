@@ -41,7 +41,7 @@ from textual.widgets import Footer, Header, Input, Markdown, OptionList, Static
 from textual.widgets.option_list import Option
 from textual.timer import Timer
 
-from .config import AppConfig, load_config, load_settings_dict, save_config
+from .config import AppConfig, DEFAULT_TELEMETRY_SETTINGS, load_config, load_settings_dict, save_config
 from .shell_agent import create_shell_agent
 from .settings_agent import create_settings_agent
 from .theme import DEFAULT_THEME, available_themes, get_theme_path
@@ -901,6 +901,37 @@ class TerminalApp(App):
         ]
         if extra_args:
             cmd.extend(extra_args)
+
+        telemetry_cfg = self.config.extras.get("telemetry")
+        if isinstance(telemetry_cfg, dict):
+            normalized = dict(DEFAULT_TELEMETRY_SETTINGS)
+            for key, value in telemetry_cfg.items():
+                normalized[key] = value
+            telemetry_cfg = normalized
+        else:
+            telemetry_cfg = dict(DEFAULT_TELEMETRY_SETTINGS)
+
+        if telemetry_cfg.get("enabled"):
+            cmd.append("--telemetry")
+            endpoint = telemetry_cfg.get("endpoint")
+            if endpoint:
+                cmd.extend(["--telemetry-endpoint", str(endpoint)])
+            protocol = telemetry_cfg.get("protocol")
+            if protocol:
+                cmd.extend(["--telemetry-protocol", str(protocol)])
+            project = telemetry_cfg.get("project_name")
+            if project:
+                cmd.extend(["--telemetry-project", str(project)])
+            api_key_env = telemetry_cfg.get("api_key_env")
+            if api_key_env:
+                cmd.extend(["--telemetry-api-key-env", str(api_key_env)])
+            if telemetry_cfg.get("auto_instrument"):
+                cmd.append("--telemetry-auto-instrument")
+            if not telemetry_cfg.get("batch", True):
+                cmd.append("--telemetry-no-batch")
+            if telemetry_cfg.get("verbose"):
+                cmd.append("--telemetry-verbose")
+
         return cmd
 
     def _close_log_handle(self) -> None:

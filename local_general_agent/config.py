@@ -15,6 +15,16 @@ DEFAULT_THEME = "dark"
 DEFAULT_CONTEXT_WINDOW = 16_384
 DEFAULT_SEARCH_PROVIDER = None
 VALID_SEARCH_PROVIDERS = {"google_cse", "serpapi_google", "brave"}
+DEFAULT_TELEMETRY_SETTINGS: dict[str, Any] = {
+    "enabled": False,
+    "endpoint": "http://localhost:4317",
+    "protocol": "grpc",
+    "project_name": "local-responses",
+    "batch": True,
+    "auto_instrument": False,
+    "verbose": False,
+    "api_key_env": "PHOENIX_API_KEY",
+}
 
 
 @dataclass
@@ -55,8 +65,12 @@ def load_config(available_themes: set[str]) -> AppConfig:
     search_blob = data.get("search") or {}
     search_config = _coerce_search_config(search_blob)
 
-    known_keys = {"theme", "context_window_tokens", "search"}
+    telemetry_blob = data.get("telemetry")
+    telemetry_config = _coerce_telemetry_config(telemetry_blob)
+
+    known_keys = {"theme", "context_window_tokens", "search", "telemetry"}
     extras = {key: value for key, value in data.items() if key not in known_keys}
+    extras["telemetry"] = telemetry_config
 
     config = AppConfig(
         theme=theme,
@@ -73,6 +87,10 @@ def load_config(available_themes: set[str]) -> AppConfig:
 def save_config(config: AppConfig) -> None:
     """Persist configuration to disk."""
     _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    telemetry = _coerce_telemetry_config(config.extras.get("telemetry"))
+    extras_payload = dict(config.extras)
+    extras_payload.pop("telemetry", None)
+
     data: dict[str, Any] = {
         "theme": config.theme,
         "context_window_tokens": config.context_window_tokens,
@@ -81,7 +99,8 @@ def save_config(config: AppConfig) -> None:
             "provider": config.search.provider,
             "credentials": dict(config.search.credentials),
         },
-        **config.extras,
+        "telemetry": telemetry,
+        **extras_payload,
     }
     _CONFIG_FILE.write_text(json.dumps(data, indent=2))
 
@@ -122,3 +141,23 @@ def _coerce_search_config(raw: Any) -> SearchConfig:
                 credentials[key] = value
 
     return SearchConfig(enabled=enabled, provider=provider, credentials=credentials)
+
+
+def _coerce_telemetry_config(raw: Any) -> dict[str, Any]:
+    telemetry = dict(DEFAULT_TELEMETRY_SETTINGS)
+    if not isinstance(raw, dict):
+        return telemetry
+
+    for key, default_value in DEFAULT_TELEMETRY_SETTINGS.items():
+        value = raw.get(key, default_value)
+        if isinstance(default_value, bool):
+            telemetry[key] = bool(value)
+        elif isinstance(default_value, str):
+            telemetry[key] = str(value) if value is not None else default_value
+        else:
+            telemetry[key] = value if value is not None else default_value
+
+    if telemetry["protocol"] not in {"grpc", "http/protobuf"}:
+        telemetry["protocol"] = DEFAULT_TELEMETRY_SETTINGS["protocol"]
+
+    return telemetry
