@@ -129,6 +129,29 @@ self.show_menu("Settings", [
 
 ## Customization Examples
 
+### Enabling Phoenix Telemetry (Local Docker)
+
+If you're running Arize Phoenix locally via Docker (default container exposes gRPC on `http://localhost:4317`), add the following snippet to `local_general_agent/config/settings.json` to enable tracing when the Terminal app launches the bundled `local_responses` service:
+
+```json
+{
+  "theme": "light",
+  "context_window_tokens": 16384,
+  "telemetry": {
+    "enabled": true,
+    "endpoint": "http://localhost:4317",
+    "protocol": "grpc",
+    "project_name": "local-responses",
+    "batch": true,
+    "auto_instrument": false,
+    "verbose": false,
+    "api_key_env": "PHOENIX_API_KEY"
+  }
+}
+```
+
+If Phoenix is running without authentication, no API key is necessary; otherwise set `PHOENIX_API_KEY` in your environment before launching the app.
+
 ### Extending the App
 
 You can extend the `TerminalApp` class to add custom functionality:
