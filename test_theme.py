@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from local_general_agent import AppConfig, TerminalApp, load_config, save_config
 from local_general_agent.theme import available_themes
+from local_general_agent.config import DEFAULT_TELEMETRY_SETTINGS
 
 
 def test_config_roundtrip() -> None:
@@ -35,6 +36,14 @@ def test_apply_theme_updates_state() -> None:
             assert app.theme_name == theme
     finally:
         app.apply_theme(original)
+
+
+def test_default_telemetry_settings_present() -> None:
+    config = load_config(set(available_themes()))
+    telemetry = config.extras.get("telemetry")
+    assert isinstance(telemetry, dict)
+    for key, value in DEFAULT_TELEMETRY_SETTINGS.items():
+        assert telemetry.get(key) == value
 
 
 if __name__ == "__main__":
