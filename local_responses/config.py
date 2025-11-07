@@ -26,6 +26,26 @@ class AdkAgentConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class AdkMemoryConfig(BaseModel):
+    """Controls the local SQLite+FTS+vec memory service exposed to ADK."""
+
+    enabled: bool = True
+    db_path: Path = Path("memories.db")
+    dense_candidates: int = 80
+    sparse_candidates: int = 80
+    fuse_top_k: int = 30
+    rerank_top_n: int = 12
+    embedding_device: str | None = None
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    preload_tool: bool = True
+    load_tool: bool = True
+    memory_agent_enabled: bool = True
+    memory_agent_model: str = "gemma2-2b-it"
+    max_events: int = 20
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ReasoningConfig(BaseModel):
     """Native reasoning controls for providers that expose reasoning APIs."""
 
@@ -83,6 +103,7 @@ class ModelConfig(BaseModel):
     frequency_penalty: float | None = None
     healthcheck: bool = False
     adk: AdkAgentConfig = Field(default_factory=AdkAgentConfig)
+    adk_memory: AdkMemoryConfig = Field(default_factory=AdkMemoryConfig)
 
     model_config = ConfigDict(extra="allow", validate_assignment=True)
 
@@ -141,6 +162,7 @@ class TelemetryConfig(BaseModel):
 
 __all__ = [
     "AdkAgentConfig",
+    "AdkMemoryConfig",
     "BackendName",
     "DatabaseConfig",
     "ModelConfig",

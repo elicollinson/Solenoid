@@ -3,3 +3,8 @@
 litellm>=1.74
 google-adk>=1.18.0
 arize-phoenix>=12.9.0
+sentence-transformers>=3.0.0
+torch>=2.3.0
+numpy>=1.26.0
+sqlite-vec>=0.1.2
+FlagEmbedding>=1.2.10

@@ -169,6 +169,18 @@ You can use `OLLAMA_API_BASE` or any other LiteLLM knobs in the same way describ
 
 > ℹ️ The ADK agent keeps conversation state per `conversation_id`, so each Terminal UI tab maps to its own ADK session automatically—no extra setup required.
 
+### Local Hybrid Memory for ADK
+
+When the Google ADK backend is selected the service now boots a local memory stack (`memories.db`) that runs entirely on SQLite + FTS5 + [sqlite-vec](https://alexgarcia.xyz/sqlite-vec/):
+
+- **Persistence:** profile, episodic, and semantic memories live in `memory/schema.sql` (with triggers that mirror rows into FTS5 and vec0 virtual tables).
+- **Local embeddings:** `memory/embeddings.py` loads `nomic-ai/nomic-embed-text-v1.5` through `sentence-transformers`, applies the Matryoshka 256D crop, and writes sqlite-vec blobs—no external embedding API or Ollama required.
+- **Hybrid retrieval:** `memory/search.py` combines sqlite-vec ANN (distance) + FTS5 BM25 via Reciprocal Rank Fusion and reranks with BGE v2 m3 (`FlagEmbedding`).
+- **ADK tools:** the agent automatically receives `PreloadMemoryTool` + `load_memory`, powered by `SqliteMemoryService`, so it can recall facts each turn. You can point the store at a different path with `python -m local_responses --memory-db-path /path/to/mem.db`.
+- **Memory agent + tools:** import `memory.memory_tools` to access `store_memory`, `retrieve_memory`, and the dedicated `memory_agent` if you want a specialized agent that other ADK agents can call through function tools.
+
+Everything runs locally on macOS (M3+) as long as the dependencies listed in the “Implementation Prompt” are installed (torch, sentence-transformers, sqlite-vec, FlagEmbedding, numpy). If your system Python cannot load extensions, install `pysqlite3-binary` and set `PYTHONPATH` accordingly.
+
 ### Extending the App
 
 You can extend the `TerminalApp` class to add custom functionality:
