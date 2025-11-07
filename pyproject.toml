@@ -21,6 +21,11 @@ dependencies = [
     "requests>=2.31.0",
     "litellm>=1.74",
     "arize-phoenix>=12.9.0",
+    "sentence-transformers>=3.0.0",
+    "torch>=2.3.0",
+    "numpy>=1.26.0",
+    "sqlite-vec>=0.1.2",
+    "FlagEmbedding>=1.2.10",
 ]
 
 [project.scripts]
@@ -30,4 +35,15 @@ terminal-app = "local_general_agent.main:main"
 dev = [
     "httpx>=0.27.0",
     "pytest>=8.1.0",
+]
+
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = [
+    "local_general_agent*",
+    "local_responses*",
+    "memory*",
 ]

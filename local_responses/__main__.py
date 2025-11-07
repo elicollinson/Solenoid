@@ -9,7 +9,7 @@ import typer
 import uvicorn
 
 from .app import create_app
-from .config import DatabaseConfig, ModelConfig, ServiceConfig
+from .config import AdkMemoryConfig, DatabaseConfig, ModelConfig, ServiceConfig
 
 
 cli = typer.Typer(help="Local Responses service commands.")
@@ -31,6 +31,7 @@ def serve(
     context_window: int = typer.Option(16384, "--context-window", help="Context window token budget for trimming history (set to 0 to disable)."),
     api_key: Optional[str] = typer.Option(None, "--api-key", help="Require this API key for incoming requests."),
     db_path: Path = typer.Option(Path("local_responses.db"), "--db-path", help="SQLite database location."),
+    memory_db_path: Path = typer.Option(Path("memories.db"), "--memory-db-path", help="SQLite database for ADK long-term memory."),
     reload: bool = typer.Option(False, "--reload", help="Enable auto-reload (development only)."),
     log_level: str = typer.Option("info", "--log-level", help="Uvicorn log level."),
 ) -> None:
@@ -46,6 +47,7 @@ def serve(
             temperature=temperature,
             top_p=top_p,
             context_window_tokens=context_window if context_window > 0 else 0,
+            adk_memory=AdkMemoryConfig(db_path=memory_db_path),
         ),
         database=DatabaseConfig(path=db_path),
         enable_llama_backend=model == "llama_cpp",

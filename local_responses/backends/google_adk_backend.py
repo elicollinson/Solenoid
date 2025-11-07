@@ -13,11 +13,14 @@ from google.adk.events.event import Event
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.runners import Runner
 from google.adk.sessions.in_memory_session_service import InMemorySessionService
+from google.adk.tools.load_memory_tool import load_memory
+from google.adk.tools.preload_memory_tool import PreloadMemoryTool
 from google.genai import types
 
 from ..config import ModelConfig
 from ..tool_parsing import merge_tool_call_deltas
 from . import Backend, GenerationParams, GenerationResult, StreamChunk
+from memory.adk_sqlite_memory import SqliteMemoryService
 
 
 logger = logging.getLogger("local_responses.backends.google_adk")
@@ -39,6 +42,7 @@ class GoogleAdkBackend(Backend):
         self._session_locks_lock = asyncio.Lock()
         self._provider_name = "google_adk"
         self._tools_warning_emitted = False
+        self._memory_service: SqliteMemoryService | None = None
 
     def supports_json_schema(self) -> bool:
         """Delegate JSON schema support to the configured LLM via LiteLLM."""
@@ -53,10 +57,12 @@ class GoogleAdkBackend(Backend):
                 return
 
             self._agent = self._build_agent()
+            self._memory_service = self._init_memory_service()
             self._runner = Runner(
                 agent=self._agent,
                 app_name=self._cfg.adk.app_name,
                 session_service=self._session_service,
+                memory_service=self._memory_service,
             )
             self._ready = True
             logger.info(
@@ -156,6 +162,10 @@ class GoogleAdkBackend(Backend):
         if gen_config is not None:
             agent_kwargs["generate_content_config"] = gen_config
 
+        tools = self._memory_tools()
+        if tools:
+            agent_kwargs["tools"] = tools
+
         return Agent(**agent_kwargs)
 
     def _build_generation_config(self) -> types.GenerateContentConfig | None:
@@ -181,6 +191,40 @@ class GoogleAdkBackend(Backend):
         if not env_name:
             return None
         return os.environ.get(env_name)
+
+    def _init_memory_service(self) -> SqliteMemoryService | None:
+        if self._memory_service is not None:
+            return self._memory_service
+
+        mem_cfg = getattr(self._cfg, "adk_memory", None)
+        if mem_cfg is None or not mem_cfg.enabled:
+            return None
+
+        service = SqliteMemoryService(
+            mem_cfg.db_path,
+            embedding_device=mem_cfg.embedding_device,
+            dense_candidates=mem_cfg.dense_candidates,
+            sparse_candidates=mem_cfg.sparse_candidates,
+            fuse_top_k=mem_cfg.fuse_top_k,
+            rerank_top_n=mem_cfg.rerank_top_n,
+            reranker_model=mem_cfg.reranker_model,
+            max_events=mem_cfg.max_events,
+        )
+        self._memory_service = service
+        logger.info("SQLite memory enabled", extra={"path": str(mem_cfg.db_path)})
+        return service
+
+    def _memory_tools(self) -> list[Any]:
+        mem_cfg = getattr(self._cfg, "adk_memory", None)
+        if mem_cfg is None or not mem_cfg.enabled:
+            return []
+
+        tools: list[Any] = []
+        if mem_cfg.preload_tool:
+            tools.append(PreloadMemoryTool())
+        if mem_cfg.load_tool:
+            tools.append(load_memory)
+        return tools
 
     def _maybe_warn_tools(self, tools: Sequence[dict[str, Any]] | None) -> None:
         if not tools or self._tools_warning_emitted:
