@@ -8,7 +8,22 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-BackendName = Literal["mlx_granite", "llama_cpp", "litellm"]
+BackendName = Literal["mlx_granite", "llama_cpp", "litellm", "google_adk"]
+
+
+class AdkAgentConfig(BaseModel):
+    """Runtime configuration for the Google ADK conversational agent."""
+
+    name: str = "TerminalAssistant"
+    description: str = "Conversational agent that powers the local terminal UI."
+    instruction: str = (
+        "You are a helpful local assistant operating entirely on the user's machine. "
+        "Keep answers concise and focus on actionable guidance."
+    )
+    app_name: str = "local-responses"
+    user_id: str = "terminal-user"
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ReasoningConfig(BaseModel):
@@ -67,6 +82,7 @@ class ModelConfig(BaseModel):
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
     healthcheck: bool = False
+    adk: AdkAgentConfig = Field(default_factory=AdkAgentConfig)
 
     model_config = ConfigDict(extra="allow", validate_assignment=True)
 
@@ -124,6 +140,7 @@ class TelemetryConfig(BaseModel):
 
 
 __all__ = [
+    "AdkAgentConfig",
     "BackendName",
     "DatabaseConfig",
     "ModelConfig",

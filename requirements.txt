@@ -1,4 +1,5 @@
 # Requirements mirror for environments that rely on pip sync.
 # Prefer installing via `uv pip install -e .` to stay in sync with pyproject.toml.
 litellm>=1.74
+google-adk>=1.18.0
 arize-phoenix>=12.9.0

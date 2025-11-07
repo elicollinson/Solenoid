@@ -41,7 +41,8 @@ graph LR
 ### `local_responses/config.py`
 - **Purpose:** Dataclass configuration layer for service, database, and model settings.
 - **Key specifics & constraints:**  
-  - `BackendName` literal restricts `ModelConfig.backend` to `"mlx_granite"` or `"llama_cpp"`.  
+  - `BackendName` literal restricts `ModelConfig.backend` to one of `google_adk`, `mlx_granite`, `llama_cpp`, or `litellm`.  
+  - `AdkAgentConfig` captures the Google ADK agent metadata (name, app name, instruction, user id) so the backend can create deterministic sessions.  
   - Defaults match the Granite tiny model, a 16k-token window, and WAL-enabled SQLite.
 - **Usage:**  
   - `ServiceConfig` consumed by `local_responses.app.create_app` to bootstrap state.  
@@ -50,11 +51,11 @@ graph LR
 ### `local_responses/backends/__init__.py`
 - **Purpose:** Declares the backend protocol (`Backend`) and shared data containers used by concrete model integrations.
 - **Key specifics:**  
-  - `GenerationParams` centralises model settings (temperature, top_p, stop sequences, penalties, response format).  
+  - `GenerationParams` centralises model settings (temperature, top_p, stop sequences, penalties, response format) plus per-request metadata (`conversation_id`, most recent user messages).  
   - `StreamChunk` and `GenerationResult` standardise streaming vs. non-streaming outputs.
 - **Usage:**  
   - `local_responses.app` builds `GenerationParams` and expects a `Backend`.  
-  - `MLXBackend` and `LlamaCppBackend` implement the protocol.  
+  - `MLXBackend`, `GoogleAdkBackend`, and `LlamaCppBackend` implement the protocol.  
   - `create_backend()` loads the correct backend based on `ServiceConfig.model.backend`.
 
 ### `local_responses/backends/mlx_backend.py`
@@ -223,3 +224,10 @@ graph LR
 - Persistent state is split: `local_responses` stores conversations in SQLite, while `local_general_agent` keeps user preferences in a JSON file and assistant sessions in SQLite (`agents.SQLiteSession`).
 - The placeholder llama.cpp backend can be enabled via CLI, but requests will fail until the implementation lands; `ServiceState.ensure_backend_ready()` translates that into a 503 error.
 - API key checks are optional and controlled entirely by `ServiceConfig.api_key`; terminal clients honour this via environment variables (`LOCAL_RESPONSES_API_KEY`).
+-### `local_responses/backends/google_adk_backend.py`
+- **Purpose:** Conversational backend that instantiates a Google ADK `Agent` + `Runner` pair backed by LiteLLM.
+- **Key specifics & constraints:**  
+  - Maintains per-conversation ADK sessions using the configured `AdkAgentConfig` (app name + user id).  
+  - Converts OpenAI-style response requests into ADK `types.Content`, streams `Event` objects back as `StreamChunk`s, and surfaces LiteLLM usage metadata/tool calls.  
+  - Leverages ADK’s [`LiteLlm` adapter](https://github.com/google/adk-python/blob/main/contributing/samples/hello_world_ollama/README.md) so any LiteLLM-compatible Granite deployment (Ollama, Vertex, HTTP bridge, etc.) can power the agent.
+- **Usage:** Enabled whenever `ModelConfig.backend` is `"google_adk"`; this is now the default backend used by the terminal UI.

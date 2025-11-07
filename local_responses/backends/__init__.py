@@ -17,6 +17,8 @@ class GenerationParams:
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
     response_format: dict[str, Any] | None = None
+    conversation_id: str | None = None
+    current_user_messages: Sequence[dict[str, Any]] | None = None
 
 
 @dataclass(slots=True)
@@ -94,6 +96,14 @@ def create_backend(name: str, **kwargs: Any) -> Backend:
         if model_config is None:
             raise ValueError("LiteLLM backend requires a model_config instance")
         return LiteLLMBackend(model_config=model_config)
+
+    if normalized in {"google_adk", "adk"}:
+        from .google_adk_backend import GoogleAdkBackend
+
+        model_config = kwargs.get("model_config")
+        if model_config is None:
+            raise ValueError("Google ADK backend requires a model_config instance")
+        return GoogleAdkBackend(model_config=model_config)
 
     raise ValueError(f"Unknown backend: {name}")
 
