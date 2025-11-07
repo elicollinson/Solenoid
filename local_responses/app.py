@@ -29,6 +29,7 @@ from .adapter_responses import (
     response_usage_event,
 )
 from .backends import GenerationParams, create_backend
+from .compaction.context_compactor import ContextCompactor
 from .config import ServiceConfig
 from .schemas import ResponsePayload, ResponsesRequest
 from .store import ConversationStore, ContextWindowManager
@@ -86,6 +87,15 @@ class ServiceState:
         self.backend = create_backend(config.model.backend, **backend_kwargs)
         self.context_manager = ContextWindowManager(config.model.context_window_tokens)
         self.default_system_prompt = _load_default_prompt()
+        compaction_cfg = getattr(config.model, "compaction", None)
+        self.compactor: ContextCompactor | None = None
+        if compaction_cfg is not None:
+            self.compactor = ContextCompactor(
+                store=self.store,
+                backend=self.backend,
+                context_manager=self.context_manager,
+                config=compaction_cfg,
+            )
         self.logger = LOGGER
         self.tracer: Tracer | None = self._init_tracer()
 
@@ -241,14 +251,41 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
 
         tokenizer = getattr(backend, "tokenizer", None)
 
-        history = state.store.get_history_for_response(req.previous_response_id) if req.previous_response_id else state.store.get_messages(conversation_id)
+        history = (
+            state.store.get_history_for_response(req.previous_response_id)
+            if req.previous_response_id
+            else state.store.get_messages(conversation_id)
+        )
 
         if not history and state.default_system_prompt:
             # Seed conversation with default instructions.
             state.store.append_messages(conversation_id, [{"role": "system", "content": state.default_system_prompt}])
             history = state.store.get_messages(conversation_id)
 
-        effective_messages = list(history)
+        compactor = state.compactor
+        if compactor and tokenizer is not None:
+            try:
+                mutated = await compactor.maybe_compact(
+                    conversation_id,
+                    history,
+                    tokenizer,
+                    tools,
+                )
+            except Exception:  # pragma: no cover - defensive logging
+                state.logger.exception("Context compaction failed")
+            else:
+                if mutated:
+                    history = (
+                        state.store.get_history_for_response(req.previous_response_id)
+                        if req.previous_response_id
+                        else state.store.get_messages(conversation_id)
+                    )
+
+        prompt_ready_history = [
+            {"role": msg.get("role", "user"), "content": msg.get("content")}
+            for msg in history
+        ]
+        effective_messages = list(prompt_ready_history)
         if req.instructions:
             effective_messages.append({"role": "system", "content": req.instructions})
         effective_messages.extend(normalized_messages)

@@ -8,9 +8,21 @@ A modern terminal application with Solarized theming and slash command menu supp
 - **Slash Commands**: Type `/` to access various menu commands with interactive navigation
 - **Keyboard Navigation**: Navigate menus with arrow keys, Enter, and Esc
 - **Solarized Themes**: Authentic Solarized color palette for both light and dark modes - affects all colors, borders, and accents
+- **Context Compaction**: Automatically condense older turns into a structured memory snapshot when the chat nears the model's token budget—no extra memory service required
 - **Persistent Settings**: Last selected theme is saved to `local_general_agent/config/settings.json`
 - **Full-Screen TUI**: Modern text-based UI using Textual framework with Rich formatting
 - **Smooth Experience**: No color block artifacts or border issues
+
+### When Does Context Compaction Run?
+
+Compaction is governed by the `model.compaction` settings (see `local_responses/config.py`). The key dials are:
+
+- **trigger_ratio** – the compactor wakes up once the tokenizer-estimated prompt tokens exceed `trigger_ratio × context_window_tokens` (always respecting `limits.hard_tokens`). Defaults to `0.75`, so a 16k window compacts near ~12k tokens.
+- **min_history_messages** – avoids summarizing tiny conversations. Nothing happens until at least this many messages exist (default `8`).
+- **preserve_recent_messages** – the newest N turns are never dropped, even if the compactor suggests trimming them (default `4`).
+- **limits.* fields** – `target_tokens`, `hard_tokens`, and the max counts for notes/anchors bound the compactor’s own JSON output so it can fit back into the context for small models.
+
+Each time those conditions are met the service asks the current model to emit a structured snapshot, persists it in SQLite, removes any safe-to-drop rows, and inserts a succinct system message summarizing the prior discussion.
 
 ## Installation
 
