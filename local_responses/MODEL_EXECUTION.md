@@ -10,7 +10,7 @@ This document explains, in detail, how the `local_responses` service loads a lan
   - CLI: `python -m local_responses` (`local_responses/__main__.py`)  
   - ASGI import: `local_responses.app.create_app()`
 - **ServiceConfig (`local_responses/config.py`):**  
-  - `ModelConfig` describes backend (`mlx_granite` or `llama_cpp`), model ID, default sampling parameters, and context window.  
+  - `ModelConfig` describes backend (`google_adk`, `mlx_granite`, `litellm`, or `llama_cpp`), model ID, default sampling parameters, ADK agent metadata, and context window.  
   - `DatabaseConfig` supplies the SQLite path and pragma defaults.  
   - `ServiceConfig` wraps server binding info, optional API key enforcement, and an `enable_llama_backend` flag to expose not-yet-implemented integrations.
 - **ServiceState (`local_responses/app.py`):**  
@@ -76,6 +76,10 @@ sequenceDiagram
     - Logs both the attempt and success/failure via the `local_responses.backends.mlx` logger.  
     - Stores the tokenizer reference so prompt token counts can be computed.  
     - Raises `RuntimeError` if all repos fail; the exception propagates as a 503 response.
+  - **GoogleAdkBackend (`backends/google_adk_backend.py`):**  
+    - Builds a Google ADK `Agent` + `Runner` instance backed by the ADK [`LiteLlm` adapter](https://github.com/google/adk-python/blob/main/contributing/samples/hello_world_ollama/README.md), so any LiteLLM-compatible Granite deployment (Ollama, MLX HTTP bridge, Vertex, etc.) can power the agent.  
+    - Persists session state per `conversation_id`/`user_id` via `InMemorySessionService`, guaranteeing that each Terminal UI chat maps to its own ADK session.  
+    - Converts the latest user messages into `types.Content` and streams ADK `Event`s back as `StreamChunk`s, preserving LiteLLM usage metadata and function-call payloads for downstream tool parsing.
   - **LlamaCppBackend:** raises `NotImplementedError`, which is caught by `ensure_backend_ready()` and translated into a 503 "Backend not available" response.
 
 ### 6. Streaming Response Handling

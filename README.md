@@ -152,6 +152,23 @@ If you're running Arize Phoenix locally via Docker (default container exposes gR
 
 If Phoenix is running without authentication, no API key is necessary; otherwise set `PHOENIX_API_KEY` in your environment before launching the app.
 
+### Google ADK Conversational Backend
+
+The bundled `local_responses` service now defaults to the `google_adk` backend so every chat turn is handled by a Google Agent Development Kit (ADK) conversational agent instead of a single raw model call. The agent uses ADK’s [`LiteLlm` model adapter](https://github.com/google/adk-python/blob/main/contributing/samples/hello_world_ollama/README.md) under the hood, so you can keep running the same Granite model by pointing LiteLLM at your preferred runtime (Ollama, MLX HTTP bridge, Vertex, etc.).
+
+1. Start the terminal app as usual – it will autostart `local_responses` with `LOCAL_RESPONSES_MODEL=google_adk`.
+2. Export the LiteLLM-compatible environment variables for your Granite deployment. For example, if you expose `granite4:tiny-h` through Ollama’s OpenAI bridge:
+
+```bash
+export LOCAL_RESPONSES_MODEL_ID="granite4:tiny-h"
+export OPENAI_API_BASE="http://localhost:11434/v1"
+export OPENAI_API_KEY="local-demo-key"
+```
+
+You can use `OLLAMA_API_BASE` or any other LiteLLM knobs in the same way described in the ADK docs.
+
+> ℹ️ The ADK agent keeps conversation state per `conversation_id`, so each Terminal UI tab maps to its own ADK session automatically—no extra setup required.
+
 ### Extending the App
 
 You can extend the `TerminalApp` class to add custom functionality:

@@ -19,7 +19,11 @@ cli = typer.Typer(help="Local Responses service commands.")
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", "-h", help="Bind address."),
     port: int = typer.Option(4000, "--port", "-p", help="Port to listen on."),
-    model: str = typer.Option("mlx_granite", "--model", help="Backend name: mlx_granite or llama_cpp."),
+    model: str = typer.Option(
+        "google_adk",
+        "--model",
+        help="Backend name: google_adk, mlx_granite, llama_cpp, or litellm.",
+    ),
     model_id: str = typer.Option("mlx_granite_4.0_h_tiny_4bit", "--model-id", help="Model identifier reported via /v1/models."),
     max_output_tokens: int = typer.Option(1024, "--max-output-tokens", help="Maximum tokens to generate per response."),
     temperature: float = typer.Option(0.7, "--temperature", help="Sampling temperature."),

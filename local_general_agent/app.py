@@ -880,7 +880,7 @@ class TerminalApp(App):
     def _build_server_command(self) -> list[str]:
         """Assemble the command used to launch the local responses service."""
         runner = os.environ.get("LOCAL_RESPONSES_RUNNER", "uv")
-        model = os.environ.get("LOCAL_RESPONSES_MODEL", "mlx_granite")
+        model = os.environ.get("LOCAL_RESPONSES_MODEL", "google_adk")
         model_id = os.environ.get("LOCAL_RESPONSES_MODEL_ID", "mlx_granite_4.0_h_tiny_4bit")
         port = os.environ.get("LOCAL_RESPONSES_PORT", "4000")
         extra_args = shlex.split(os.environ.get("LOCAL_RESPONSES_EXTRA_ARGS", ""))

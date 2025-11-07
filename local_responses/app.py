@@ -7,7 +7,7 @@ import re
 import os
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator, Iterator
+from typing import Any, AsyncIterator, Iterator, Sequence
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -81,7 +81,7 @@ class ServiceState:
         self.config = config
         self.store = ConversationStore(config.database.path)
         backend_kwargs: dict[str, Any] = {}
-        if config.model.backend == "litellm":
+        if config.model.backend in {"litellm", "google_adk"}:
             backend_kwargs["model_config"] = config.model
         self.backend = create_backend(config.model.backend, **backend_kwargs)
         self.context_manager = ContextWindowManager(config.model.context_window_tokens)
@@ -263,7 +263,12 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
 
         return trimmed, last_input_turn
 
-    async def build_generation_params(req: ResponsesRequest, state: ServiceState) -> GenerationParams:
+    async def build_generation_params(
+        req: ResponsesRequest,
+        state: ServiceState,
+        conversation_id: str,
+        normalized_messages: Sequence[dict[str, Any]],
+    ) -> GenerationParams:
         model_cfg = state.config.model
         return GenerationParams(
             temperature=req.temperature if req.temperature is not None else model_cfg.temperature,
@@ -273,6 +278,8 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             presence_penalty=req.presence_penalty,
             frequency_penalty=req.frequency_penalty,
             response_format=_response_format_to_dict(req.response_format),
+            conversation_id=conversation_id,
+            current_user_messages=tuple(normalized_messages),
         )
 
     def record_response(
@@ -331,7 +338,7 @@ def create_app(config: ServiceConfig | None = None) -> FastAPI:
             tools_payload,
             normalized_messages,
         )
-        gen_params = await build_generation_params(req, state)
+        gen_params = await build_generation_params(req, state, conversation_id, normalized_messages)
 
         backend = state.backend
         tokenizer = getattr(backend, "tokenizer", None)
