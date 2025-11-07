@@ -43,6 +43,14 @@ CREATE_TABLES_SQL = [
         FOREIGN KEY (conversation_id) REFERENCES conversations (id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS compaction_state (
+        conversation_id TEXT PRIMARY KEY,
+        payload_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+    )
+    """,
 ]
 
 
@@ -159,7 +167,7 @@ class ConversationStore:
         conversation_id: str,
         up_to_turn: int | None = None,
     ) -> list[dict[str, Any]]:
-        query = "SELECT role, content FROM messages WHERE conversation_id=?"
+        query = "SELECT id, role, content, turn_index, created_at FROM messages WHERE conversation_id=?"
         params: list[Any] = [conversation_id]
         if up_to_turn is not None:
             query += " AND turn_index <= ?"
@@ -173,8 +181,57 @@ class ConversationStore:
                 content = json.loads(row["content"])
             except json.JSONDecodeError:
                 content = row["content"]
-            messages.append({"role": row["role"], "content": content})
+            messages.append(
+                {
+                    "id": row["id"],
+                    "role": row["role"],
+                    "content": content,
+                    "turn_index": row["turn_index"],
+                    "created_at": row["created_at"],
+                }
+            )
         return messages
+
+    def delete_messages(self, conversation_id: str, message_ids: Sequence[int]) -> int:
+        if not message_ids:
+            return 0
+        placeholders = ",".join(["?"] * len(message_ids))
+        params: list[Any] = [conversation_id]
+        params.extend(message_ids)
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                f"DELETE FROM messages WHERE conversation_id=? AND id IN ({placeholders})",
+                params,
+            )
+            return cur.rowcount
+
+    def save_compaction_state(self, conversation_id: str, payload: dict[str, Any]) -> None:
+        encoded = json.dumps(payload)
+        updated_at = int(time.time())
+        with self._lock, self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO compaction_state (conversation_id, payload_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(conversation_id) DO UPDATE SET
+                    payload_json=excluded.payload_json,
+                    updated_at=excluded.updated_at
+                """,
+                (conversation_id, encoded, updated_at),
+            )
+
+    def get_compaction_state(self, conversation_id: str) -> dict[str, Any] | None:
+        cur = self._conn.execute(
+            "SELECT payload_json FROM compaction_state WHERE conversation_id=?",
+            (conversation_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        try:
+            return json.loads(row["payload_json"])
+        except json.JSONDecodeError:
+            return None
 
     def get_response_record(self, response_id: str) -> dict[str, Any] | None:
         cur = self._conn.execute(
@@ -213,6 +270,31 @@ class ContextWindowManager:
     def __init__(self, token_budget: int | None = 16384) -> None:
         self.token_budget = token_budget
 
+    def estimate_tokens(
+        self,
+        messages: Sequence[dict[str, Any]],
+        tokenizer: Any,
+        tools: Sequence[dict[str, Any]] | None = None,
+    ) -> int | None:
+        if not messages:
+            return 0
+        if tokenizer is None:
+            return None
+        try:
+            tokens = tokenizer.apply_chat_template(
+                list(messages),
+                tools=list(tools) if tools else None,
+                add_generation_prompt=True,
+                tokenize=True,
+            )
+            if isinstance(tokens, dict) and "input_ids" in tokens:
+                return len(tokens["input_ids"])
+            if isinstance(tokens, (list, tuple)):
+                return len(tokens)
+        except Exception:  # pragma: no cover - tokenizer specific
+            return None
+        return None
+
     def trim(
         self,
         messages: Sequence[dict[str, Any]],
@@ -226,30 +308,14 @@ class ContextWindowManager:
 
         trimmed = list(messages)
 
-        def token_count(payload: Sequence[dict[str, Any]]) -> int | None:
-            try:
-                tokens = tokenizer.apply_chat_template(
-                    payload,
-                    tools=list(tools) if tools else None,
-                    add_generation_prompt=True,
-                    tokenize=True,
-                )
-                if isinstance(tokens, dict) and "input_ids" in tokens:
-                    return len(tokens["input_ids"])
-                if isinstance(tokens, (list, tuple)):
-                    return len(tokens)
-            except Exception:  # pragma: no cover - tokenizer specific
-                return None
-            return None
-
-        count = token_count(trimmed)
+        count = self.estimate_tokens(trimmed, tokenizer, tools)
         if count is None or count <= self.token_budget:
             return trimmed
 
         # Sliding window: drop earliest message until within budget.
         while len(trimmed) > 1:
             trimmed = trimmed[1:]
-            count = token_count(trimmed)
+            count = self.estimate_tokens(trimmed, tokenizer, tools)
             if count is not None and count <= self.token_budget:
                 break
 

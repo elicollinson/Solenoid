@@ -78,6 +78,32 @@ class ReActConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class CompactionLimitsConfig(BaseModel):
+    """Per-call output budgets for the context compactor."""
+
+    target_tokens: int = 600
+    hard_tokens: int = 800
+    max_notes: int = 6
+    max_anchors: int = 6
+    min_verbatim_anchors: int = 2
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CompactionConfig(BaseModel):
+    """Controls when and how the context compactor runs."""
+
+    enabled: bool = True
+    trigger_ratio: float = 0.75
+    min_history_messages: int = 8
+    preserve_recent_messages: int = 4
+    max_output_tokens: int = 512
+    do_not_summarize_keywords: list[str] = Field(default_factory=list)
+    limits: CompactionLimitsConfig = Field(default_factory=CompactionLimitsConfig)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ModelConfig(BaseModel):
     """Model selection and backend options."""
 
@@ -95,6 +121,7 @@ class ModelConfig(BaseModel):
     reasoning: ReasoningConfig | None = None
     anthropic_thinking: ThinkingConfig | None = None
     react: ReActConfig | None = None
+    compaction: CompactionConfig = Field(default_factory=CompactionConfig)
     max_output_tokens: int = 1024
     temperature: float = 0.7
     top_p: float = 0.9
@@ -161,6 +188,8 @@ class TelemetryConfig(BaseModel):
 
 
 __all__ = [
+    "CompactionConfig",
+    "CompactionLimitsConfig",
     "AdkAgentConfig",
     "AdkMemoryConfig",
     "BackendName",
