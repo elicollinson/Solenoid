@@ -18,6 +18,7 @@ numpy = "^2.3.4"
 sentence-transformers = "^5.1.2"
 sqlite-vec = "^0.1.6"
 pydantic = "^2.12.4"
+litellm = "^1.79.3"
 
 
 [tool.poetry.group.dev.dependencies]
