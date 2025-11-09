@@ -18,8 +18,8 @@ from google.adk.tools.preload_memory_tool import PreloadMemoryTool
 from google.genai import types
 
 from ..config import ModelConfig
-from ..tool_parsing import merge_tool_call_deltas
-from . import Backend, GenerationParams, GenerationResult, StreamChunk
+from .tool_parsing import merge_tool_call_deltas
+from .backends import Backend, GenerationParams, GenerationResult, StreamChunk
 from memory.adk_sqlite_memory import SqliteMemoryService
 
 
