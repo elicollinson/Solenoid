@@ -26,14 +26,14 @@ Each time those conditions are met the service asks the current model to emit a 
 
 ## Installation
 
-This project uses `uv` for dependency management:
+This project uses `poetry` for dependency management:
 
 ```bash
-# Install dependencies
-uv sync
+# Install dependencies (creates the virtual environment)
+poetry install
 
 # Run the application
-uv run python -m local_general_agent.main
+poetry run python -m local_general_agent.main
 ```
 
 ## Usage
@@ -41,7 +41,7 @@ uv run python -m local_general_agent.main
 ### Running the App
 
 ```bash
-uv run python -m local_general_agent.main
+poetry run python -m local_general_agent.main
 ```
 
 ### Built-in Commands
@@ -279,8 +279,8 @@ if command == "mytools":
 
 ### Requirements
 
-- Python 3.13+
-- uv (for dependency management)
+- Python 3.10+
+- Poetry (for dependency management)
 
 ### Dependencies
 
