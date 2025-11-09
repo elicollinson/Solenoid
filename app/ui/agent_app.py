@@ -1,48 +1,10 @@
 from textual.app import App, ComposeResult
-from textual.containers import VerticalScroll
-from textual.widgets import Markdown, TextArea, Header, Footer
-from textual import events
-from textual.message import Message
+from textual.widgets import Header, Footer
 from textual import work
 from app.agent.client import ADKClient
+from app.ui.message_list import MessageList
+from app.ui.chat_input import ChatInput
 
-# ---------- Your existing widgets ----------
-class ChatInput(TextArea):
-    """Enter submits; Ctrl+J inserts a newline. If your terminal emits 'shift+enter',
-    it's handled too, but not all terminals do."""
-
-    class Submitted(Message):
-        def __init__(self, text: str) -> None:
-            self.text = text
-            super().__init__()  # <- no sender argument
-
-    def on_key(self, event: events.Key) -> None:
-        if event.key == "enter":  # plain Enter = send
-            event.prevent_default()
-            text = self.text.rstrip()
-            if text:
-                self.post_message(self.Submitted(text))
-                self.text = "" 
-        elif event.key in ("ctrl+j", "shift+enter"):
-            event.prevent_default()
-            self.insert("\n")
-
-
-class MessageList(VerticalScroll):
-    DEFAULT_CSS = """
-    MessageList { height: 1fr; padding: 1; }
-    MessageList > Markdown { border: round $panel; padding: 1; margin-bottom: 1; }
-    """
-
-    def on_mount(self) -> None:
-        # Pin to bottom as new content is added until user scrolls up.
-        self.anchor(True)
-
-    def add(self, md: str) -> None:
-        self.mount(Markdown(md))
-
-
-# ---------- Your Chat app wired to ADK ----------
 class AgentApp(App):
     CSS = """
     Screen { layout: vertical; }
