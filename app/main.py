@@ -1,4 +1,7 @@
 from app.ui.agent_app import AgentApp
 
-if __name__ == "__main__":
+def main():
     AgentApp().run()
+
+if __name__ == "__main__":
+    main()
