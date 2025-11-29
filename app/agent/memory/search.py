@@ -55,11 +55,11 @@ def _hybrid_candidates(
         SELECT m.id, m.text, m.memory_type, m.source, m.importance, v.distance
         FROM memories_vec AS v
         JOIN memories AS m ON m.id = v.rowid
-        WHERE m.user_id = ? AND m.app_name = ? AND v.embedding MATCH ?
+        WHERE m.user_id = ? AND m.app_name = ? AND v.embedding MATCH ? AND k = ?
         ORDER BY v.distance
         LIMIT ?
         """,
-        (user_id, app_name, qblob, dense_limit),
+        (user_id, app_name, qblob, dense_limit, dense_limit),
     ).fetchall()
 
     sparse_rows = conn.execute(
