@@ -31,17 +31,24 @@ def llm_extractor(session: Session, tail_text: str) -> Iterable[dict]:
     prompt = EXTRACTION_PROMPT.format(conversation_text=tail_text)
     
     try:
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+
         async def _generate():
             request = LlmRequest(contents=[Content(parts=[Part.from_text(text=prompt)])])
             response_gen = model.generate_content_async(request)
             
             full_text = ""
             async for chunk in response_gen:
-                if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
-                    full_text += chunk.candidates[0].content.parts[0].text
+                if chunk.content and chunk.content.parts:
+                    full_text += chunk.content.parts[0].text
             return full_text
 
-        text = asyncio.run(_generate())
+        # Since we are likely called from within an async loop (via SqliteMemoryService),
+        # but this function must be synchronous, we cannot use asyncio.run() directly.
+        # We run it in a separate thread to get a fresh loop.
+        with ThreadPoolExecutor() as executor:
+            text = executor.submit(asyncio.run, _generate()).result()
         
         # Clean up markdown code blocks if present
         if "```json" in text:
