@@ -73,3 +73,65 @@ def start_ollama_server(
     except Exception:
         pass
     raise TimeoutError(f"Ollama did not become ready on {host}:{port} within {wait_seconds}s.")
+
+
+def ensure_model_available(model_name: str, host: str = "127.0.0.1", port: int = 11434):
+    """
+    Ensures that the specified model is available in Ollama.
+    If not, it attempts to pull it.
+    """
+    # 1. Check if model exists
+    if _check_model_exists(model_name, host, port):
+        return
+
+    # 2. Pull model if not exists
+    print(f"Model '{model_name}' not found. Pulling from Ollama library...")
+    _pull_model(model_name, host, port)
+    print(f"Model '{model_name}' pulled successfully.")
+
+
+def _check_model_exists(model_name: str, host: str, port: int) -> bool:
+    """
+    Checks if the model is already installed via GET /api/tags.
+    """
+    url = f"http://{host}:{port}/api/tags"
+    try:
+        r = requests.get(url)
+        if r.status_code == 200:
+            data = r.json()
+            models = data.get("models", [])
+            # Check if model_name matches any 'name' in the list
+            # Note: Ollama model names in /api/tags usually include the tag (e.g. "llama3:latest")
+            # We should check for exact match or match with ":latest" if no tag provided in model_name
+            for m in models:
+                if m["name"] == model_name:
+                    return True
+                # Handle case where model_name might not have a tag but the list does, or vice versa if needed.
+                # For now, we assume exact match is required as per LiteLLM usage.
+            return False
+    except Exception as e:
+        print(f"Error checking models: {e}")
+    return False
+
+
+def _pull_model(model_name: str, host: str, port: int):
+    """
+    Pulls the model via POST /api/pull.
+    Uses stream=True to avoid timeouts and show progress (optional).
+    """
+    url = f"http://{host}:{port}/api/pull"
+    payload = {"name": model_name, "stream": False} # Using stream=False for simplicity as per plan, but with long timeout
+    
+    try:
+        # Large models take time, so we set a very long timeout (e.g., 30 minutes)
+        r = requests.post(url, json=payload, timeout=1800)
+        r.raise_for_status()
+        
+        # If we wanted to handle stream=True, we would iterate over r.iter_lines()
+        
+    except requests.exceptions.HTTPError as e:
+        if r.status_code == 404:
+             raise ValueError(f"Model '{model_name}' not found in Ollama library.") from e
+        raise RuntimeError(f"Failed to pull model '{model_name}': {e}") from e
+    except Exception as e:
+        raise RuntimeError(f"Failed to pull model '{model_name}': {e}") from e
