@@ -110,9 +110,13 @@ def search_memories(
     if dense_limit <= 0 and sparse_limit <= 0:
         return []
 
+    # Sanitize query for FTS5: remove non-alphanumeric chars except spaces
+    # This prevents syntax errors with punctuation like '?'
+    safe_query = "".join(c for c in query_text if c.isalnum() or c.isspace())
+    
     candidates = _hybrid_candidates(
         conn,
-        query_text=query_text,
+        query_text=safe_query,
         user_id=user_id,
         app_name=app_name,
         dense_limit=max(dense_limit, 0),
