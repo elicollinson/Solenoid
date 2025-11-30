@@ -11,6 +11,7 @@ from app.agent.memory.extractor import llm_extractor
 import yaml
 from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
+from google.adk.agents.callback_context import CallbackContext
 from mcp import StdioServerParameters
 
 LOGGER = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ session_service = InMemorySessionService()
 
 # 2. Define Callbacks
 
-def inject_memories(callback_context, llm_request):
+def inject_memories(callback_context: CallbackContext, llm_request):
     """Before model runs: search memories and inject into prompt."""
     try:
         # Extract user text from the llm_request
@@ -57,6 +58,8 @@ def inject_memories(callback_context, llm_request):
         # Format memories
         memory_text = "\n".join([f"- {text}" for text, score, row in hits])
         
+        callback_context.session.state["existing_memories"] = memory_text  # Store for extractor use
+
         # Inject into the llm_request
         # We append a new part with the memories to the last content message
         injection = f"\n\nRelevant Memories:\n{memory_text}"

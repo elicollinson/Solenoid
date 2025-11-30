@@ -12,12 +12,17 @@ LOGGER = logging.getLogger(__name__)
 EXTRACTION_PROMPT = """
 You are a memory extraction system. Your task is to analyze the recent conversation and extract key facts, preferences, or events that should be remembered for future interactions.
 
+Avoid duplicating any memories that are already stored. Refer to the list of loaded memories below to prevent redundancy.
+
 Return the output as a JSON list of objects, where each object has:
 - "text": The memory content (string).
 - "type": One of "profile" (user details), "episodic" (events), "semantic" (facts).
 - "importance": An integer from 1 to 5 (5 being most important).
 
 If no relevant memories are found, return an empty list [].
+
+Loaded Stored Memories:
+{existing_memories}
 
 Recent Conversation:
 {conversation_text}
@@ -28,7 +33,11 @@ def llm_extractor(session: Session, tail_text: str) -> Iterable[dict]:
     # We instantiate a new model client for extraction to avoid interfering with the main agent's state if any
     model = get_granite_model()
     
-    prompt = EXTRACTION_PROMPT.format(conversation_text=tail_text)
+    existing_memories = session.state.get("existing_memories", "None")
+
+    LOGGER.info(f"Extracting memories with existing: {existing_memories} and tail: {tail_text}")
+
+    prompt = EXTRACTION_PROMPT.format(conversation_text=tail_text, existing_memories=existing_memories)
     
     try:
         import asyncio
@@ -59,6 +68,7 @@ def llm_extractor(session: Session, tail_text: str) -> Iterable[dict]:
         text = text.strip()
         
         memories = json.loads(text)
+        LOGGER.info(f"Extracted memories: {memories}")
         if isinstance(memories, list):
             return memories
             
