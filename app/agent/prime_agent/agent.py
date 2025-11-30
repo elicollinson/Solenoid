@@ -59,7 +59,9 @@ def inject_memories(callback_context, llm_request):
         if llm_request.contents:
              llm_request.contents[-1].parts.append(types.Part.from_text(text=injection))
         
-        LOGGER.info(f"Injected {len(hits)} memories into prompt.")
+        LOGGER.info(f"Injected {len(hits)} memories into prompt:")
+        for i, (text, score, row) in enumerate(hits, 1):
+             LOGGER.info(f"  [{i}] (score={score:.2f}): {text}")
 
     except Exception as e:
         LOGGER.error(f"Failed to inject memories: {e}")
@@ -67,6 +69,27 @@ def inject_memories(callback_context, llm_request):
 def save_memories(callback_context, **kwargs):
     """After model runs: extract and save memories (async)."""
     try:
+        # Check if we have a response object and if the turn is complete
+        llm_response = kwargs.get("llm_response")
+        
+        # Debug logging to identify correct keys if llm_response isn't what we expect
+        LOGGER.info(f"save_memories kwargs keys: {list(kwargs.keys())}")
+        if llm_response:
+             LOGGER.info(f"llm_response type: {type(llm_response)}")
+             LOGGER.info(f"turn_complete: {getattr(llm_response, 'turn_complete', 'N/A')}")
+             LOGGER.info(f"finish_reason: {getattr(llm_response, 'finish_reason', 'N/A')}")
+
+        # If we have a response, we only want to save on the final chunk/turn completion
+        if llm_response:
+            # Check for turn_complete or if it's not a partial chunk
+            # LlmResponse has 'turn_complete' field, but it might be None
+            is_complete = getattr(llm_response, "turn_complete", False)
+            finish_reason = getattr(llm_response, "finish_reason", None)
+            
+            # If it's not explicitly complete and there's no finish reason, assume it's an intermediate chunk
+            if not is_complete and not finish_reason:
+                return
+
         # We are in a running event loop, so we must use create_task
         loop = asyncio.get_running_loop()
         loop.create_task(memory_service.add_session_to_memory(callback_context.session))
