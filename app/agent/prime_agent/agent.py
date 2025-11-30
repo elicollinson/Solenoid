@@ -8,6 +8,10 @@ from app.agent.models.granite import get_granite_model
 from app.agent.memory.adk_sqlite_memory import SqliteMemoryService
 from app.agent.memory.search import search_memories
 from app.agent.memory.extractor import llm_extractor
+import yaml
+from google.adk.tools.mcp_tool import McpToolset
+from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
+from mcp import StdioServerParameters
 
 LOGGER = logging.getLogger(__name__)
 
@@ -97,6 +101,41 @@ def save_memories(callback_context, **kwargs):
     except Exception as e:
         LOGGER.error(f"Failed to save memories: {e}")
 
+        LOGGER.error(f"Failed to save memories: {e}")
+
+def load_mcp_toolsets(config_path="mcp_config.yaml"):
+    """Load MCP toolsets from a YAML configuration file."""
+    toolsets = []
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        
+        if not config or "mcp_servers" not in config:
+            LOGGER.warning(f"No 'mcp_servers' found in {config_path}")
+            return []
+
+        for server_name, server_config in config["mcp_servers"].items():
+            LOGGER.info(f"Loading MCP server: {server_name}")
+            try:
+                toolset = McpToolset(
+                    connection_params=StdioConnectionParams(
+                        server_params=StdioServerParameters(
+                            command=server_config["command"],
+                            args=server_config["args"]
+                        )
+                    )
+                )
+                toolsets.append(toolset)
+            except Exception as e:
+                LOGGER.error(f"Failed to load MCP server {server_name}: {e}")
+                
+    except FileNotFoundError:
+        LOGGER.warning(f"MCP config file not found at {config_path}")
+    except Exception as e:
+        LOGGER.error(f"Error loading MCP config: {e}")
+        
+    return toolsets
+
 # 3. Define the Agent
 # We pass the memory_service HERE so the Runner can use it natively
 agent = Agent(
@@ -105,6 +144,7 @@ agent = Agent(
     instruction="You are a concise, helpful assistant. Prefer Markdown.",
     before_model_callback=[inject_memories],
     after_model_callback=[save_memories],
+    tools=load_mcp_toolsets()
 )
 
 root_agent = agent

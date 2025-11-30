@@ -193,6 +193,37 @@ When the Google ADK backend is selected the service now boots a local memory sta
 
 Everything runs locally on macOS (M3+) as long as the dependencies listed in the “Implementation Prompt” are installed (torch, sentence-transformers, sqlite-vec, FlagEmbedding, numpy). If your system Python cannot load extensions, install `pysqlite3-binary` and set `PYTHONPATH` accordingly.
 
+### Model Context Protocol (MCP) Support
+
+The agent supports the Model Context Protocol (MCP), allowing you to dynamically extend its capabilities with external tools. You can configure MCP servers using a `mcp_config.yaml` file in the root of the repository.
+
+#### Configuration
+
+Create a `mcp_config.yaml` file in the project root. The file should define the MCP servers you want to connect to.
+
+**Example `mcp_config.yaml`:**
+
+```yaml
+mcp_servers:
+  filesystem:
+    command: "npx"
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "./"
+```
+
+In this example:
+- `filesystem` is the name of the server (used for logging).
+- `command` is the executable to run (e.g., `npx`, `python`).
+- `args` is a list of arguments to pass to the command.
+
+#### How it Works
+
+When the agent starts, it checks for `mcp_config.yaml`. If found, it initializes the configured MCP servers and adds their tools to the agent's toolset. This allows the agent to use these tools seamlessly during conversations.
+
+For example, with the filesystem server configured above, the agent can use tools like `list_directory` and `read_file` to interact with your local files.
+
 ### Extending the App
 
 You can extend the `TerminalApp` class to add custom functionality:
