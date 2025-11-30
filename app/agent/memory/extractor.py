@@ -3,7 +3,7 @@ import logging
 from typing import Iterable
 from google.adk.sessions import Session
 from google.genai.types import Content, Part
-from app.agent.models.granite import get_granite_model
+from app.agent.models.factory import get_model
 from google.adk.models.lite_llm import LlmRequest
 import asyncio
 
@@ -31,7 +31,7 @@ Recent Conversation:
 def llm_extractor(session: Session, tail_text: str) -> Iterable[dict]:
     """Extracts memories using an LLM."""
     # We instantiate a new model client for extraction to avoid interfering with the main agent's state if any
-    model = get_granite_model()
+    model = get_model("extractor")
     
     existing_memories = session.state.get("existing_memories", "None")
 

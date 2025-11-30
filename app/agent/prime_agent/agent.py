@@ -4,7 +4,7 @@ import logging
 from google.adk.agents import Agent
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
-from app.agent.models.granite import get_granite_model
+from app.agent.models.factory import get_model
 from app.agent.memory.adk_sqlite_memory import SqliteMemoryService
 from app.agent.memory.search import search_memories
 from app.agent.memory.extractor import llm_extractor
@@ -143,7 +143,7 @@ def load_mcp_toolsets(config_path="mcp_config.yaml"):
 # We pass the memory_service HERE so the Runner can use it natively
 agent = Agent(
     name="helper",
-    model=get_granite_model(),
+    model=get_model("agent"),
     instruction="You are a concise, helpful assistant. Prefer Markdown.",
     before_model_callback=[inject_memories],
     after_model_callback=[save_memories],

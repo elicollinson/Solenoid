@@ -335,3 +335,36 @@ Textual provides several advantages over other terminal UI libraries:
 - Color scheme based on [Solarized](https://ethanschoonover.com/solarized/)
 - Built with [Textual](https://github.com/textualize/textual)
 - Rich formatting from [Rich](https://github.com/Textualize/rich)
+
+## Model Configuration
+
+The application allows you to configure which models are used for different roles (agent, memory extractor, etc.) via a YAML configuration file.
+
+### Configuration File
+
+Create a file named `app_settings.yaml` in the root directory of the project. If this file is not present, the application defaults to using `granite4:tiny-h` for all roles.
+
+**Example `app_settings.yaml`:**
+
+```yaml
+models:
+  default:
+    name: "granite4:tiny-h"
+    provider: "ollama_chat"
+  agent:
+    name: "granite4:tiny-h"
+    # provider defaults to "ollama_chat" if not specified
+  extractor:
+    name: "granite4:tiny-h"
+```
+
+### Model Requirements
+
+The models used for the **agent** role must support **function calling** (tool use). This is critical because the agent relies on tools to interact with the memory system and other extensions.
+
+- **Recommended Models**: `granite4:tiny-h`, `llama3.1`, `mistral-nemo`, or other models known to have strong function calling capabilities.
+- **Ollama Names**: Use the exact model name as it appears in the [Ollama library](https://ollama.com/library).
+
+### Automatic Model Pulling
+
+If a configured model is not found in your local Ollama instance, the application will automatically attempt to pull it when the agent starts. This ensures that the required models are always available without manual intervention.

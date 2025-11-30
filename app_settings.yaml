@@ -1,0 +1,8 @@
+models:
+  default:
+    name: "ibm/granite4:tiny-h-q4_1"
+    provider: "ollama_chat"
+  agent:
+    name: "ibm/granite4:tiny-h-q4_1"
+  extractor:
+    name: "ibm/granite4:tiny-h-q4_0"
