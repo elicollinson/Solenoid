@@ -101,11 +101,40 @@ class WasmEngine:
         output_data = stdout_path.read_text(encoding='utf-8') if stdout_path.exists() else ""
         error_data = stderr_path.read_text(encoding='utf-8') if stderr_path.exists() else ""
 
-        # 6. Cleanup
+        # 6. Capture Output Files
+        # We scan the temp_dir for any files that are NOT:
+        # - stdout.txt
+        # - stderr.txt
+        # - Any of the input context_files
+        # - The python.wasm or lib folder (though those are mounted, not copied usually, but let's be safe)
+        
+        output_files = {}
+        input_filenames = set(context_files.keys()) if context_files else set()
+        ignored_files = {"stdout.txt", "stderr.txt"} | input_filenames
+
+        for file_path in temp_dir.rglob("*"):
+            if file_path.is_file():
+                relative_name = file_path.relative_to(temp_dir).name
+                if relative_name not in ignored_files:
+                    # Read as bytes to support images/binary
+                    # But for now, let's try to read as text if possible, or bytes if not?
+                    # The ADK CodeExecutionOutputFile usually expects string content or bytes.
+                    # Let's read as bytes, but for the dictionary we might need to decide.
+                    # If we want to support text-based SVGs/JSONs easily, we can try text first.
+                    try:
+                        content = file_path.read_text(encoding='utf-8')
+                    except UnicodeDecodeError:
+                        # Fallback to bytes if it's a binary image
+                        content = file_path.read_bytes()
+                    
+                    output_files[relative_name] = content
+
+        # 7. Cleanup
         shutil.rmtree(temp_dir)
 
         return {
             "stdout": output_data,
             "stderr": error_data,
-            "outcome": outcome
+            "outcome": outcome,
+            "output_files": output_files
         }

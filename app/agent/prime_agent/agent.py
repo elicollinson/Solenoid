@@ -14,6 +14,7 @@ from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
 from google.adk.agents.callback_context import CallbackContext
 from mcp import StdioServerParameters
 from app.agent.code_executor_agent.agent import code_executor_agent
+from app.agent.chart_generator_agent.agent import chart_generator_agent
 
 LOGGER = logging.getLogger(__name__)
 
@@ -143,13 +144,25 @@ def load_mcp_toolsets(config_path="mcp_config.yaml"):
 # 3. Define the Agent
 # We pass the memory_service HERE so the Runner can use it natively
 agent = Agent(
-    name="helper",
+    name="prime_agent",
     model=get_model("agent"),
-    instruction="You are a concise, helpful assistant. Prefer Markdown. Handoff any deterministic tasks or code requests to the code_executor Agent.",
+    instruction="""
+    You are the Prime Agent, a concise and helpful assistant.
+    
+    YOUR CAPABILITIES:
+    1.  **General Assistance**: Answer questions directly if you can.
+    2.  **Code Execution**: Delegate to `code_executor_agent` for general Python tasks.
+    3.  **Charting/Visualization**: Delegate to `chart_generator_agent` for creating charts.
+    
+    TOOL USAGE:
+    - To delegate, use the `transfer_to_agent` tool.
+    - Argument `agent_name` MUST be either "code_executor_agent" or "chart_generator_agent".
+    - DO NOT try to call a tool named "helper" or "prime_agent".
+    """,
     # before_model_callback=[inject_memories],
     # after_model_callback=[save_memories],
     tools=load_mcp_toolsets(),
-    sub_agents=[code_executor_agent]
+    sub_agents=[code_executor_agent, chart_generator_agent]
 )
 
 root_agent = agent
