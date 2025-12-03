@@ -3,6 +3,6 @@ models:
     name: "ibm/granite4:tiny-h-q4_1"
     provider: "ollama_chat"
   agent:
-    name: "gpt-oss:20b"
+    name: "ibm/granite4:tiny-h-q4_1"
   extractor:
     name: "ibm/granite4:tiny-h-q4_0"
