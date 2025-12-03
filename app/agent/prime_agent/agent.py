@@ -13,6 +13,7 @@ from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
 from google.adk.agents.callback_context import CallbackContext
 from mcp import StdioServerParameters
+from app.agent.code_executor_agent.agent import code_executor_agent
 
 LOGGER = logging.getLogger(__name__)
 
@@ -144,10 +145,11 @@ def load_mcp_toolsets(config_path="mcp_config.yaml"):
 agent = Agent(
     name="helper",
     model=get_model("agent"),
-    instruction="You are a concise, helpful assistant. Prefer Markdown.",
-    before_model_callback=[inject_memories],
-    after_model_callback=[save_memories],
-    tools=load_mcp_toolsets()
+    instruction="You are a concise, helpful assistant. Prefer Markdown. Handoff any deterministic tasks or code requests to the code_executor Agent.",
+    # before_model_callback=[inject_memories],
+    # after_model_callback=[save_memories],
+    tools=load_mcp_toolsets(),
+    sub_agents=[code_executor_agent]
 )
 
 root_agent = agent
