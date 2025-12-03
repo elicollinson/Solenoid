@@ -47,7 +47,7 @@ class ADKLocalWasmExecutor(BaseCodeExecutor):
         # 4. RETURN CORRECT OBJECT (Updated to match your definition)
         # We pass raw stdout/stderr separately so the framework can format them.
         return CodeExecutionResult(
-            stdout=result['stdout'],
-            stderr=result['stderr']
+            stdout=final_stdout,
+            stderr=final_stderr
             # output_files=[]  <-- We can omit this since it has a default factory
         )

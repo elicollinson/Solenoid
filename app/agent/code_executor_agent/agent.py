@@ -25,24 +25,6 @@ secure_executor = ADKLocalWasmExecutor(wasm_path=str(WASM_PATH))
 
 session_service = InMemorySessionService()
 
-def kickstart_model(callback_context, llm_request):
-    """
-    INJECT A WAKE-UP COMMAND.
-    This forces the model to treat the transfer as a 'START' signal.
-    """
-    if llm_request.contents:
-        # We append a hidden instruction to the very end of the prompt
-        steering_msg = (
-            "\n\n[SYSTEM]: Control has been transferred to you. "
-            "The user is waiting for the answer. "
-            "WRITE THE PYTHON CODE IMMEDIATELY."
-        )
-        
-        # Attach to the last message in the history
-        last_msg = llm_request.contents[-1]
-        if last_msg.parts:
-            last_msg.parts.append(types.Part.from_text(text=steering_msg))
-
 def load_mcp_toolsets(config_path="mcp_config.yaml"):
     """Load MCP toolsets from a YAML configuration file."""
     toolsets = []
@@ -81,21 +63,27 @@ agent = Agent(
     name="code_executor_agent",
     model=get_model("agent"),
     instruction="""
-    You are a helpful assistant equipped with a Python Code Executor.
+    You are a Python Code Executor Agent.
     
-    REQUIREMENT:
-    - Always use the code executor to run any code, do not attempt to execute code yourself.
-    - ALWAYS Write Python code to solve logic/math problems, data processing, or any deterministic tasks.
-    - YOU MUST invoke the code executor for ANY code you write.
-
-    YOUR PROCESS:
-    1. If the user asks a logic/math question, write Python code to solve it.
-    2. The system will execute it and return the "COMMAND OUTPUT".
-    3. CRITICAL: When the code correctly excecutes and you receive the output, STOP writing code. 
-       Simply return the answer clearly based on the output.
+    YOUR GOAL: Solve the user's request using Python code.
+    
+    CRITICAL PROTOCOL:
+    1.  RECEIVE REQUEST: Analyze the user's request.
+    2.  WRITE CODE: Write Python code to solve it.
+        - **IMPORTANT**: You MUST use `print()` to output the final result.
+        - Variables not printed will NOT be visible to you.
+        - Example: `print(result)`
+    3.  WAIT FOR OUTPUT: The system will execute your code and return the result.
+    4.  ANALYZE OUTPUT: Check the "COMMAND OUTPUT".
+    5.  FINAL ANSWER: If the output is correct, use it to answer the user. DO NOT WRITE CODE AGAIN.
+    
+    STOPPING CONDITION:
+    - If you see "COMMAND OUTPUT" in the history, you have ALREADY executed the code.
+    - DO NOT re-execute the same code.
+    - DO NOT write print statements to "see" the output again.
+    - Just read the output from the history and give the final answer.
     """,
     tools=load_mcp_toolsets(),
-    before_model_callback=[kickstart_model],
     code_executor=secure_executor,
 )
 
