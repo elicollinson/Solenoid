@@ -1,8 +1,10 @@
 from typing import Any
 from google.adk.code_executors import BaseCodeExecutor
-from google.adk.code_executors.code_execution_utils import CodeExecutionResult
+from google.adk.code_executors.code_execution_utils import CodeExecutionResult, File
 from app.agent.local_execution.wasm_engine import WasmEngine
 from pydantic import PrivateAttr
+import mimetypes
+import base64
 
 class ADKLocalWasmExecutor(BaseCodeExecutor):
     _backend: Any = PrivateAttr()
@@ -44,10 +46,28 @@ class ADKLocalWasmExecutor(BaseCodeExecutor):
             final_stderr = ""
 
         print(f"   >>> Wasm Result: {result['stdout'][:100]}...")
-        # 4. RETURN CORRECT OBJECT (Updated to match your definition)
-        # We pass raw stdout/stderr separately so the framework can format them.
+        
+        # 4. PROCESS OUTPUT FILES
+        output_files = []
+        if "output_files" in result:
+            for name, content in result["output_files"].items():
+                mime_type, _ = mimetypes.guess_type(name)
+                if not mime_type:
+                    mime_type = "application/octet-stream"
+                
+                # ADK expects base64 encoded string for content
+                if isinstance(content, str):
+                    content_bytes = content.encode('utf-8')
+                else:
+                    content_bytes = content
+                
+                b64_content = base64.b64encode(content_bytes).decode('ascii')
+                
+                output_files.append(File(name=name, content=b64_content, mime_type=mime_type))
+
+        # 5. RETURN CORRECT OBJECT
         return CodeExecutionResult(
             stdout=final_stdout,
-            stderr=final_stderr
-            # output_files=[]  <-- We can omit this since it has a default factory
+            stderr=final_stderr,
+            output_files=output_files
         )
