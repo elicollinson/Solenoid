@@ -2,6 +2,7 @@ models:
   default:
     name: "ministral-3:8b"
     provider: "ollama_chat"
+    context_length: 8192
   agent:
     name: "ministral-3:8b"
   extractor:

@@ -48,6 +48,7 @@ def get_model(role: str = "default") -> LiteLlm:
     
     model_name = role_config.get("name", DEFAULT_MODEL)
     provider = role_config.get("provider", DEFAULT_PROVIDER)
+    context_length = role_config.get("context_length")
     
     # If the role is not 'default' and missing in config, fallback to default role's model if available,
     # otherwise use global default.
@@ -55,6 +56,8 @@ def get_model(role: str = "default") -> LiteLlm:
          default_config = models_config.get("default", {})
          model_name = default_config.get("name", DEFAULT_MODEL)
          provider = default_config.get("provider", DEFAULT_PROVIDER)
+         if context_length is None:
+             context_length = default_config.get("context_length")
 
     # Ensure model is available
     # We only need to check availability for Ollama models
@@ -74,4 +77,8 @@ def get_model(role: str = "default") -> LiteLlm:
     full_model_string = f"{provider}/{model_name}"
     LOGGER.info(f"Initializing LiteLlm with model: {full_model_string} for role: {role}")
     
-    return LiteLlm(model=full_model_string)
+    kwargs = {}
+    if context_length:
+        kwargs["num_ctx"] = context_length
+    
+    return LiteLlm(model=full_model_string, **kwargs)
