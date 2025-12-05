@@ -25,38 +25,7 @@ secure_executor = ADKLocalWasmExecutor(wasm_path=str(WASM_PATH))
 
 session_service = InMemorySessionService()
 
-def load_mcp_toolsets(config_path="mcp_config.yaml"):
-    """Load MCP toolsets from a YAML configuration file."""
-    toolsets = []
-    try:
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-        
-        if not config or "mcp_servers" not in config:
-            LOGGER.warning(f"No 'mcp_servers' found in {config_path}")
-            return []
 
-        for server_name, server_config in config["mcp_servers"].items():
-            LOGGER.info(f"Loading MCP server: {server_name}")
-            try:
-                toolset = McpToolset(
-                    connection_params=StdioConnectionParams(
-                        server_params=StdioServerParameters(
-                            command=server_config["command"],
-                            args=server_config["args"]
-                        )
-                    )
-                )
-                toolsets.append(toolset)
-            except Exception as e:
-                LOGGER.error(f"Failed to load MCP server {server_name}: {e}")
-                
-    except FileNotFoundError:
-        LOGGER.warning(f"MCP config file not found at {config_path}")
-    except Exception as e:
-        LOGGER.error(f"Error loading MCP config: {e}")
-        
-    return toolsets
 
 # 3. Define the Agent
 agent = Agent(
@@ -85,7 +54,7 @@ agent = Agent(
 
     ## IMPORTANT: ALWAYS TRANSFER YOUR RESULT TO YOUR PARENT AGENT IF EXECUTION IS COMPLETED.
     """,
-    tools=load_mcp_toolsets(),
+    # tools=load_mcp_toolsets(),
     code_executor=secure_executor,
     disallow_transfer_to_peers=True
     

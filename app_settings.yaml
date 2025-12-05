@@ -11,4 +11,17 @@ models:
 search:
   provider: "brave"
   brave_search_api_key: "BSAOg5vCNs5il_wSxF8JeOMgT9TVCuM"
-  
+
+mcp_servers:
+  filesystem:
+    command: "npx"
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "./"
+  context7:
+    type: "http"
+    url: "https://mcp.context7.com/mcp"
+    headers:
+      CONTEXT7_API_KEY: "ctx7sk-89efa144-77fd-4e17-87c2-20a9035b0980"
+
