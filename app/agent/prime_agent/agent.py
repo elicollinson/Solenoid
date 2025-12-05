@@ -151,8 +151,9 @@ agent = Agent(
     YOUR CAPABILITIES:
     1.  **General Assistance**: Answer simple questions directly.
     2.  **Complex Tasks**: Delegate ANY complex task, multi-step request, code execution, or chart generation to `planning_agent`.
+    ## IMPORTANT: ALWAYS TRANSFER YOUR RESULT TO YOUR PARENT AGENT IF EXECUTION IS COMPLETED.
     """,
-    # before_model_callback=[inject_memories],
+    before_model_callback=[],
     # after_model_callback=[save_memories],
     tools=load_mcp_toolsets(),
     sub_agents=[planning_agent]

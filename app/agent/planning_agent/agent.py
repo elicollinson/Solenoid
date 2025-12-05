@@ -62,6 +62,8 @@ PLAN_UPDATE: [
 ]
 ACTION: Delegate step 1 to generic_executor_agent.
 </format_example>
+
+## IMPORTANT: ALWAYS TRANSFER YOUR RESULT TO YOUR PARENT AGENT IF EXECUTION IS COMPLETED.
 """
 
 def get_dynamic_instruction(*args, **kwargs):
@@ -99,3 +101,4 @@ agent = Agent(
 )
 
 planning_agent = agent
+

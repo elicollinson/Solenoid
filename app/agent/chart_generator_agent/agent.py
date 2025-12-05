@@ -132,9 +132,12 @@ agent = Agent(
     - If you see "COMMAND OUTPUT" indicating success, you have ALREADY executed the code.
     - DO NOT re-execute the same code.
     - Just confirm the chart generation.
+
+    ## IMPORTANT: ALWAYS TRANSFER YOUR RESULT TO YOUR PARENT AGENT IF EXECUTION IS COMPLETED.
     """,
     tools=load_mcp_toolsets(),
     code_executor=secure_executor,
+    disallow_transfer_to_peers=True
     # sub_agents=[code_executor_agent] # Removed to avoid multi-parent error
 )
 

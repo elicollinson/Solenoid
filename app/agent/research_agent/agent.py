@@ -27,8 +27,11 @@ agent = Agent(
     3. **Follow Leads**: When reading a page, look for "Related Links", "See Also", or citations that might contain more specific or related information. If found, use `read_webpage` on those links to expand your knowledge graph. Do not stop at the first page if it links to better sources.
     4. **Synthesize**: Combine information from multiple sources. Look for consensus, discrepancies, and unique details.
     5. **Report**: Return a comprehensive summary to the planner, citing your sources (URLs) where possible.
+
+    ## IMPORTANT: ALWAYS TRANSFER YOUR RESULT TO YOUR PARENT AGENT IF EXECUTION IS COMPLETED.
     """,
-    tools=[search_tool, read_webpage_tool]
+    tools=[search_tool, read_webpage_tool],
+    disallow_transfer_to_peers=True
 )
 
 research_agent = agent
