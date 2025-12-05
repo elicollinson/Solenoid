@@ -4,6 +4,7 @@ from google.adk.agents import Agent
 from app.agent.models.factory import get_model
 from app.agent.code_executor_agent.agent import code_executor_agent
 from app.agent.chart_generator_agent.agent import chart_generator_agent
+from app.agent.research_agent.agent import research_agent
 from app.agent.planning_agent.generic_executor import generic_executor_agent
 
 LOGGER = logging.getLogger(__name__)
@@ -14,7 +15,8 @@ You are the Chief Planner. Your goal is to solve complex user requests by breaki
 ### YOUR TEAM
 1.  **code_executor_agent**: Expert in Python code execution. Use for calculations, data processing, and algorithmic tasks.
 2.  **chart_generator_agent**: Expert in creating visualizations using Pygal. Use when the user asks for a chart or graph.
-3.  **generic_executor_agent**: General purpose assistant. Use for general knowledge, research (if tools available), or simple text tasks.
+3.  **research_agent**: Expert in web research. Use for finding information, news, or details about specific topics.
+4.  **generic_executor_agent**: General purpose assistant. Use for general knowledge, or simple text tasks.
 
 ### GLOBAL STATE (The Plan)
 You must maintain a "To-Do List" in your mind.
@@ -93,7 +95,7 @@ agent = Agent(
     name="planning_agent",
     model=get_model("agent"), # Using the 'agent' model config, typically a smarter model
     instruction=get_dynamic_instruction, # Use the dynamic instruction function
-    sub_agents=[code_executor_agent, chart_generator_agent, generic_executor_agent]
+    sub_agents=[code_executor_agent, chart_generator_agent, research_agent, generic_executor_agent]
 )
 
 planning_agent = agent

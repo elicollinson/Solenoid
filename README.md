@@ -368,3 +368,41 @@ The models used for the **agent** role must support **function calling** (tool u
 ### Automatic Model Pulling
 
 If a configured model is not found in your local Ollama instance, the application will automatically attempt to pull it when the agent starts. This ensures that the required models are always available without manual intervention.
+
+## Search Configuration
+
+The application includes a `research_agent` capable of performing web searches and retrieving page content. This functionality is configured via the `app_settings.yaml` file.
+
+### Search Settings
+
+Add a `search` section to your `app_settings.yaml` to configure the search provider.
+
+**Example `app_settings.yaml` with search:**
+
+```yaml
+models:
+  default:
+    name: "ministral-3:8b"
+    provider: "ollama_chat"
+
+search:
+  # Provider can be "google_cse", "serpapi_google", or "brave"
+  search_provider: "google_cse"
+  
+  # For Google CSE
+  google_cse_api_key: "YOUR_GOOGLE_API_KEY"
+  google_cse_cx: "YOUR_CUSTOM_SEARCH_ENGINE_ID"
+  
+  # For SerpAPI
+  # serpapi_api_key: "YOUR_SERPAPI_KEY"
+  
+  # For Brave Search
+  # brave_search_api_key: "YOUR_BRAVE_API_KEY"
+```
+
+### Supported Providers
+
+1.  **Google Custom Search Engine (CSE)**: Requires an API Key and a Custom Search Engine ID (CX).
+2.  **SerpAPI**: Requires a SerpAPI key.
+3.  **Brave Search**: Requires a Brave Search API key.
+

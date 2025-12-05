@@ -6,3 +6,8 @@ models:
     name: "ministral-3:8b"
   extractor:
     name: "ministral-3:8b"
+
+search:
+  provider: "brave"
+  brave_search_api_key: "BSAOg5vCNs5il_wSxF8JeOMgT9TVCuM"
+  
