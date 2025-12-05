@@ -82,9 +82,13 @@ agent = Agent(
     - DO NOT re-execute the same code.
     - DO NOT write print statements to "see" the output again.
     - Just read the output from the history and give the final answer.
+
+    ## IMPORTANT: ALWAYS TRANSFER YOUR RESULT TO YOUR PARENT AGENT IF EXECUTION IS COMPLETED.
     """,
     tools=load_mcp_toolsets(),
     code_executor=secure_executor,
+    disallow_transfer_to_peers=True
+    
 )
 
 code_executor_agent = agent

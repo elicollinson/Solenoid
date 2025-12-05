@@ -59,8 +59,11 @@ agent = Agent(
     OUTPUT:
     - Provide concise, direct answers to the Planner's specific request.
     - Do not ask follow-up questions unless absolutely necessary.
+
+    ## IMPORTANT: ALWAYS TRANSFER YOUR RESULT TO YOUR PARENT AGENT IF EXECUTION IS COMPLETED.
     """,
     tools=load_mcp_toolsets(),
+    disallow_transfer_to_peers=True
 )
 
 generic_executor_agent = agent
