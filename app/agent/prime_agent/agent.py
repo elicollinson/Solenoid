@@ -1,14 +1,14 @@
-# agent_server.py
+# prime_agent/agent.py
 import asyncio
 import logging
 from google.adk.agents import Agent
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 from app.agent.models.factory import get_model
+from app.agent.config import get_agent_prompt
 from app.agent.memory.adk_sqlite_memory import SqliteMemoryService
 from app.agent.memory.search import search_memories
 from app.agent.memory.extractor import llm_extractor
-import yaml
 from google.adk.agents.callback_context import CallbackContext
 from app.agent.planning_agent.agent import planning_agent
 
@@ -35,7 +35,7 @@ def inject_memories(callback_context: CallbackContext, llm_request):
                     for part in content.parts:
                         if part.text:
                             user_text += part.text + "\n"
-        
+
         user_text = user_text.strip()
         if not user_text:
             return
@@ -55,7 +55,7 @@ def inject_memories(callback_context: CallbackContext, llm_request):
 
         # Format memories
         memory_text = "\n".join([f"- {text}" for text, score, row in hits])
-        
+
         callback_context.session.state["existing_memories"] = memory_text  # Store for extractor use
 
         # Inject into the llm_request
@@ -63,7 +63,7 @@ def inject_memories(callback_context: CallbackContext, llm_request):
         injection = f"\n\nRelevant Memories:\n{memory_text}"
         if llm_request.contents:
              llm_request.contents[-1].parts.append(types.Part.from_text(text=injection))
-        
+
         LOGGER.info(f"Injected {len(hits)} memories into prompt:")
         for i, (text, score, row) in enumerate(hits, 1):
              LOGGER.info(f"  [{i}] (score={score:.2f}): {text}")
@@ -76,7 +76,7 @@ def save_memories(callback_context, **kwargs):
     try:
         # Check if we have a response object and if the turn is complete
         llm_response = kwargs.get("llm_response")
-        
+
         # Debug logging to identify correct keys if llm_response isn't what we expect
         LOGGER.info(f"save_memories kwargs keys: {list(kwargs.keys())}")
         if llm_response:
@@ -90,7 +90,7 @@ def save_memories(callback_context, **kwargs):
             # LlmResponse has 'turn_complete' field, but it might be None
             is_complete = getattr(llm_response, "turn_complete", False)
             finish_reason = getattr(llm_response, "finish_reason", None)
-            
+
             # If it's not explicitly complete and there's no finish reason, assume it's an intermediate chunk
             if not is_complete and not finish_reason:
                 return
@@ -105,57 +105,8 @@ def save_memories(callback_context, **kwargs):
         LOGGER.error(f"Failed to save memories: {e}")
 
 
-
-# 3. Define the Agent
-# We pass the memory_service HERE so the Runner can use it natively
-PRIME_AGENT_PROMPT = """
-You are the Prime Agent, the intelligent router of the agent system.
-
-### ROLE
-You are the decision-maker that determines whether a request can be answered directly or requires delegation to the planning system. Your goal is efficiency: handle simple tasks instantly, delegate complex ones appropriately.
-
-### DECISION FRAMEWORK
-
-**Answer Directly** (do NOT delegate) when the request is:
--   A factual question answerable from general knowledge
--   A simple explanation or definition
--   A yes/no question with straightforward reasoning
--   A brief opinion or recommendation request
--   Clarification of a previous response
-
-**Delegate to `planning_agent`** when the request involves:
--   Code execution, calculations, or data processing
--   Chart or visualization generation
--   Multi-step tasks requiring coordination
--   Web research or information gathering from external sources
--   File system operations or external integrations
--   Any task requiring specialized tools
-
-### EXAMPLES
-
-| Request | Action |
-|---------|--------|
-| "What is the capital of France?" | Answer directly: "Paris" |
-| "Calculate the factorial of 20" | Delegate → code execution required |
-| "Create a bar chart of sales data" | Delegate → chart generation required |
-| "Research the latest AI news" | Delegate → web search required |
-| "What is machine learning?" | Answer directly: explanation |
-| "Analyze this CSV and create a report" | Delegate → multi-step task |
-
-### WORKFLOW
-1.  **Analyze**: Read the request carefully.
-2.  **Classify**: Determine if it's simple (direct answer) or complex (delegation).
-3.  **Execute**:
-    -   **Simple**: Provide a clear, accurate, concise response.
-    -   **Complex**: Transfer to `planning_agent` with the full context of the request.
-4.  **Return**: Always transfer your result back to your parent agent when done.
-
-### CONSTRAINTS
--   NEVER attempt tasks requiring code execution, charts, web search, or file operations yourself.
--   NEVER guess when you can delegate to get an accurate answer.
--   ALWAYS transfer your final result to your parent agent upon completion.
--   Keep direct answers concise but complete.
-"""
+# Load prompt from settings
+PRIME_AGENT_PROMPT = get_agent_prompt("prime_agent")
 
 agent = Agent(
     name="prime_agent",
