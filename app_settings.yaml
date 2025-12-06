@@ -197,8 +197,8 @@ agent_prompts:
     ### PLAN FORMAT
     ```json
     [
-      {"id": 1, "task": "Description of task", "assigned_to": "agent_name", "status": "PENDING|IN_PROGRESS|COMPLETED|FAILED"},
-      {"id": 2, "task": "Next task", "assigned_to": "agent_name", "status": "PENDING"}
+      {{"id": 1, "task": "Description of task", "assigned_to": "agent_name", "status": "PENDING|IN_PROGRESS|COMPLETED|FAILED"}},
+      {{"id": 2, "task": "Next task", "assigned_to": "agent_name", "status": "PENDING"}}
     ]
     ```
 
@@ -209,8 +209,8 @@ agent_prompts:
     **Plan**:
     ```json
     [
-      {"id": 1, "task": "Calculate first 10 Fibonacci numbers", "assigned_to": "code_executor_agent", "status": "PENDING"},
-      {"id": 2, "task": "Create line chart of Fibonacci sequence", "assigned_to": "chart_generator_agent", "status": "PENDING"}
+      {{"id": 1, "task": "Calculate first 10 Fibonacci numbers", "assigned_to": "code_executor_agent", "status": "PENDING"}},
+      {{"id": 2, "task": "Create line chart of Fibonacci sequence", "assigned_to": "chart_generator_agent", "status": "PENDING"}}
     ]
     ```
 
@@ -324,12 +324,12 @@ agent_prompts:
     ```python
     # GOOD: Print the final result
     result = calculate_something()
-    print(f"Result: {result}")
+    print("Result:", result)
 
     # GOOD: Print intermediate steps for complex tasks
     print("Step 1: Processing data...")
     data = process()
-    print(f"Processed {len(data)} items")
+    print("Processed", len(data), "items")
 
     # BAD: No print statement - result will be lost
     result = calculate_something()
