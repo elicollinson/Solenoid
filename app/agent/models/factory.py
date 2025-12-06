@@ -4,8 +4,15 @@ import logging
 from typing import Optional
 from google.adk.models.lite_llm import LiteLlm
 from app.agent.ollama.ollama_app import start_ollama_server, ensure_model_available
+import litellm
 
 LOGGER = logging.getLogger(__name__)
+
+# Enable LiteLLM debug logging to see what's being sent to the model
+# This will show the actual tools array being passed
+litellm.set_verbose = True
+# Uncomment below for even more detailed logging:
+# litellm._turn_on_debug()
 
 DEFAULT_MODEL = "granite4:tiny-h"
 DEFAULT_PROVIDER = "ollama_chat"
