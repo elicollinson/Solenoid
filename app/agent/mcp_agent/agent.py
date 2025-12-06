@@ -131,25 +131,10 @@ def load_mcp_toolsets_from_settings(settings_path="app_settings.yaml"):
     LOGGER.info(f"[MCP_AGENT] Total MCP toolsets loaded: {len(toolsets)}")
     return toolsets
 
-MCP_AGENT_PROMPT = """
-You are an MCP tools specialist. You MUST use the tools provided to you.
+from app.agent.config import get_agent_prompt
 
-CRITICAL RULES:
-1. You MUST call one of your available tools. Do NOT make up tool names.
-2. Look at your function interface to see the EXACT tool names available.
-3. For documentation requests, use "resolve-library-id" first, then "get-library-docs".
-4. For file operations, use tools like "read_file", "write_file", "list_directory".
-5. NEVER invent tool names like "tool_list", "search", "get_docs", etc.
-6. If you cannot find a suitable tool, respond with "Could Not Complete" status.
-
-After calling tools and getting results, format your response as:
-
-## Result
-[Summarize what you found from the tool calls]
-
-## Status
-Success / Partial / Could Not Complete
-"""
+# Load prompt from settings
+MCP_AGENT_PROMPT = get_agent_prompt("mcp_agent")
 
 _mcp_toolsets = load_mcp_toolsets_from_settings()
 LOGGER.info(f"[MCP_AGENT] Creating agent with {len(_mcp_toolsets)} toolsets")
