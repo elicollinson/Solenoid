@@ -5,8 +5,11 @@ Evaluation Test Runner for General Local Agent
 Runs all test cases from the CSV file, captures full conversation history,
 grades outputs using LLM-as-judge, and saves results to structured folders.
 
+Supports multiple sequential runs with aggregated scoring for statistical reliability.
+
 Usage:
     poetry run python tests/eval/run_eval.py [--cases TC-001,TC-002] [--timeout 300] [--skip-grading]
+    poetry run python tests/eval/run_eval.py --runs 3  # Run 3 times and aggregate scores
 """
 
 import os
@@ -18,6 +21,7 @@ import asyncio
 import logging
 import argparse
 import re
+import statistics
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -707,6 +711,176 @@ def save_aggregated_scores(results_summary: dict, output_dir: Path):
     return aggregation
 
 
+def aggregate_multi_run_results(all_run_results: list[dict], output_dir: Path) -> dict:
+    """
+    Aggregate results across multiple evaluation runs.
+
+    Returns a dictionary with:
+    - Per-test-case mean, std dev, min, max across runs
+    - Per-metric aggregated statistics
+    - Overall aggregated statistics
+    - Per-category aggregated statistics
+    """
+    if not all_run_results:
+        return {}
+
+    num_runs = len(all_run_results)
+
+    # Collect scores per test case across all runs
+    test_scores_by_id = {}  # test_id -> {metric_name -> [scores across runs]}
+    test_avg_scores_by_id = {}  # test_id -> [avg_scores across runs]
+    test_metadata = {}  # test_id -> {name, category}
+
+    for run_result in all_run_results:
+        for test_result in run_result.get('test_results', []):
+            test_id = test_result.get('test_id')
+            if not test_id:
+                continue
+
+            # Store metadata
+            if test_id not in test_metadata:
+                test_metadata[test_id] = {
+                    'test_name': test_result.get('test_name', 'Unknown'),
+                    'category': test_result.get('category', 'Unknown')
+                }
+
+            # Initialize tracking structures
+            if test_id not in test_scores_by_id:
+                test_scores_by_id[test_id] = {}
+            if test_id not in test_avg_scores_by_id:
+                test_avg_scores_by_id[test_id] = []
+
+            # Collect per-metric scores
+            scores = test_result.get('scores', {})
+            for metric_key, score in scores.items():
+                if score is not None and isinstance(score, (int, float)):
+                    if metric_key not in test_scores_by_id[test_id]:
+                        test_scores_by_id[test_id][metric_key] = []
+                    test_scores_by_id[test_id][metric_key].append(score)
+
+            # Collect average scores
+            avg_score = test_result.get('avg_score')
+            if avg_score is not None:
+                test_avg_scores_by_id[test_id].append(avg_score)
+
+    # Build aggregated results per test case
+    aggregated_tests = []
+    all_mean_scores = []
+    category_scores = {}  # category -> [mean_scores]
+
+    for test_id, metric_scores in test_scores_by_id.items():
+        metadata = test_metadata.get(test_id, {})
+        category = metadata.get('category', 'Unknown')
+
+        test_agg = {
+            'test_id': test_id,
+            'test_name': metadata.get('test_name', 'Unknown'),
+            'category': category,
+            'runs_with_scores': len(test_avg_scores_by_id.get(test_id, [])),
+            'metrics': {}
+        }
+
+        # Aggregate per-metric scores
+        for metric_key, scores in metric_scores.items():
+            if scores:
+                test_agg['metrics'][metric_key] = {
+                    'mean': round(statistics.mean(scores), 2),
+                    'std_dev': round(statistics.stdev(scores), 2) if len(scores) > 1 else 0.0,
+                    'min': min(scores),
+                    'max': max(scores),
+                    'count': len(scores)
+                }
+
+        # Aggregate overall test scores
+        avg_scores = test_avg_scores_by_id.get(test_id, [])
+        if avg_scores:
+            mean_score = statistics.mean(avg_scores)
+            test_agg['overall'] = {
+                'mean': round(mean_score, 2),
+                'std_dev': round(statistics.stdev(avg_scores), 2) if len(avg_scores) > 1 else 0.0,
+                'min': round(min(avg_scores), 2),
+                'max': round(max(avg_scores), 2),
+                'count': len(avg_scores)
+            }
+            all_mean_scores.append(mean_score)
+
+            # Track category scores
+            if category not in category_scores:
+                category_scores[category] = []
+            category_scores[category].append(mean_score)
+
+        aggregated_tests.append(test_agg)
+
+    # Sort by test_id
+    aggregated_tests.sort(key=lambda x: x['test_id'])
+
+    # Build category aggregation
+    category_aggregation = {}
+    for category, scores in category_scores.items():
+        if scores:
+            category_aggregation[category] = {
+                'mean': round(statistics.mean(scores), 2),
+                'std_dev': round(statistics.stdev(scores), 2) if len(scores) > 1 else 0.0,
+                'min': round(min(scores), 2),
+                'max': round(max(scores), 2),
+                'test_count': len(scores)
+            }
+
+    # Build final aggregation structure
+    aggregation = {
+        'multi_run_info': {
+            'total_runs': num_runs,
+            'run_ids': [r.get('run_id', 'Unknown') for r in all_run_results],
+            'aggregation_timestamp': datetime.now().isoformat()
+        },
+        'overall_statistics': {},
+        'category_statistics': category_aggregation,
+        'test_statistics': aggregated_tests
+    }
+
+    # Overall statistics
+    if all_mean_scores:
+        aggregation['overall_statistics'] = {
+            'mean': round(statistics.mean(all_mean_scores), 2),
+            'std_dev': round(statistics.stdev(all_mean_scores), 2) if len(all_mean_scores) > 1 else 0.0,
+            'min': round(min(all_mean_scores), 2),
+            'max': round(max(all_mean_scores), 2),
+            'tests_scored': len(all_mean_scores)
+        }
+
+    # Save aggregated results
+    agg_file = output_dir / 'multi_run_aggregation.json'
+    with open(agg_file, 'w', encoding='utf-8') as f:
+        json.dump(aggregation, f, indent=2, ensure_ascii=False)
+    LOGGER.info(f"Saved multi-run aggregation to {agg_file}")
+
+    # Save CSV summary
+    csv_file = output_dir / 'multi_run_scores.csv'
+    csv_rows = []
+    for test in aggregated_tests:
+        row = {
+            'test_id': test['test_id'],
+            'test_name': test['test_name'],
+            'category': test['category'],
+            'runs': test.get('runs_with_scores', 0),
+            'mean_score': test.get('overall', {}).get('mean', ''),
+            'std_dev': test.get('overall', {}).get('std_dev', ''),
+            'min_score': test.get('overall', {}).get('min', ''),
+            'max_score': test.get('overall', {}).get('max', '')
+        }
+        csv_rows.append(row)
+
+    if csv_rows:
+        fieldnames = ['test_id', 'test_name', 'category', 'runs', 'mean_score', 'std_dev', 'min_score', 'max_score']
+        with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(csv_rows)
+        LOGGER.info(f"Saved multi-run scores CSV to {csv_file}")
+
+    return aggregation
+
+
 async def run_evaluation(
     test_cases: list[dict],
     output_dir: Path,
@@ -836,6 +1010,12 @@ def main():
         action='store_true',
         help='Skip LLM-as-judge grading step'
     )
+    parser.add_argument(
+        '--runs', '-n',
+        type=int,
+        default=1,
+        help='Number of sequential evaluation runs to perform (default: 1). Multiple runs are aggregated for statistical reliability.'
+    )
     args = parser.parse_args()
 
     # Paths
@@ -844,12 +1024,22 @@ def main():
     settings_path = PROJECT_ROOT / 'app_settings.yaml'
     results_base_dir = eval_dir / 'eval_results'
 
-    # Create timestamped run folder
-    run_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_dir = results_base_dir / run_timestamp
-    run_dir.mkdir(parents=True, exist_ok=True)
+    # Handle multi-run setup
+    num_runs = args.runs
+    if num_runs < 1:
+        LOGGER.error("Number of runs must be at least 1")
+        sys.exit(1)
 
-    LOGGER.info(f"Evaluation run directory: {run_dir}")
+    # Create batch directory for multi-run or single run folder
+    batch_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    if num_runs > 1:
+        batch_dir = results_base_dir / f"batch_{batch_timestamp}_{num_runs}runs"
+        batch_dir.mkdir(parents=True, exist_ok=True)
+        LOGGER.info(f"Multi-run batch directory: {batch_dir}")
+        LOGGER.info(f"Running {num_runs} sequential evaluation runs...")
+    else:
+        batch_dir = results_base_dir
+        LOGGER.info("Running single evaluation...")
 
     # Load and filter test cases
     all_test_cases = load_test_cases(csv_path)
@@ -866,82 +1056,179 @@ def main():
         LOGGER.error("No test cases to run!")
         sys.exit(1)
 
-    # Extract and save prompts from settings
+    # Extract prompts from settings (for saving with results)
     LOGGER.info("Extracting prompts from app_settings.yaml...")
     prompts_data = extract_prompts_from_settings(settings_path)
-    prompts_file = run_dir / 'prompts.yaml'
-    with open(prompts_file, 'w', encoding='utf-8') as f:
-        yaml.dump(prompts_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-    LOGGER.info(f"Saved prompts to {prompts_file}")
 
-    # Also save a copy of the test cases used
-    test_cases_file = run_dir / 'test_cases.json'
-    with open(test_cases_file, 'w', encoding='utf-8') as f:
-        json.dump(test_cases, f, indent=2, ensure_ascii=False)
-    LOGGER.info(f"Saved test cases to {test_cases_file}")
+    # Save prompts to batch directory if multi-run
+    if num_runs > 1:
+        prompts_file = batch_dir / 'prompts.yaml'
+        with open(prompts_file, 'w', encoding='utf-8') as f:
+            yaml.dump(prompts_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        LOGGER.info(f"Saved prompts to {prompts_file}")
 
-    # Run evaluation
+        # Save test cases to batch directory
+        test_cases_file = batch_dir / 'test_cases.json'
+        with open(test_cases_file, 'w', encoding='utf-8') as f:
+            json.dump(test_cases, f, indent=2, ensure_ascii=False)
+        LOGGER.info(f"Saved test cases to {test_cases_file}")
+
+    # Run evaluations
     LOGGER.info(f"Starting evaluation of {len(test_cases)} test cases...")
     if not args.skip_grading:
         LOGGER.info(f"LLM grading enabled using model: {GRADING_MODEL}")
     else:
         LOGGER.info("LLM grading disabled")
 
-    results_summary = asyncio.run(run_evaluation(
-        test_cases=test_cases,
-        output_dir=run_dir,
-        timeout_seconds=args.timeout,
-        skip_grading=args.skip_grading
-    ))
+    all_run_results = []
+    total_errors = 0
 
-    # Save summary
-    summary_file = run_dir / 'summary.json'
-    with open(summary_file, 'w', encoding='utf-8') as f:
-        json.dump(results_summary, f, indent=2, ensure_ascii=False)
+    for run_num in range(1, num_runs + 1):
+        if num_runs > 1:
+            print(f"\n{'='*70}")
+            print(f"STARTING RUN {run_num}/{num_runs}")
+            print(f"{'='*70}\n")
+            LOGGER.info(f"Starting run {run_num}/{num_runs}")
 
-    # Print summary
-    print("\n" + "="*70)
-    print("EVALUATION COMPLETE")
-    print("="*70)
-    print(f"Run ID: {results_summary['run_id']}")
-    print(f"Total tests: {results_summary['total_tests']}")
-    print(f"Completed: {results_summary['completed']}")
-    print(f"Errors: {results_summary['errors']}")
-    print(f"Grading: {'Enabled' if results_summary['grading_enabled'] else 'Disabled'}")
-    print(f"Results saved to: {run_dir}")
-    print("="*70)
+        # Create run directory
+        run_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        if num_runs > 1:
+            run_dir = batch_dir / f"run_{run_num}_{run_timestamp}"
+        else:
+            run_dir = batch_dir / run_timestamp
+        run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Print individual test results with grades
-    print("\nTest Results:")
-    print("-"*70)
-    for tr in results_summary['test_results']:
-        status = "✓" if not tr.get('error') else "✗"
-        duration = tr.get('duration_seconds', 0)
-        avg_score = tr.get('avg_score', None)
+        # Save prompts and test cases to individual run folder
+        prompts_file = run_dir / 'prompts.yaml'
+        with open(prompts_file, 'w', encoding='utf-8') as f:
+            yaml.dump(prompts_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
-        score_str = f" [Avg: {avg_score:.1f}/5]" if avg_score else ""
-        print(f"  {status} {tr['test_id']}: {duration:.2f}s{score_str}")
+        test_cases_file = run_dir / 'test_cases.json'
+        with open(test_cases_file, 'w', encoding='utf-8') as f:
+            json.dump(test_cases, f, indent=2, ensure_ascii=False)
 
-        if tr.get('error'):
-            print(f"      Error: {tr['error'][:60]}...")
+        # Run evaluation
+        results_summary = asyncio.run(run_evaluation(
+            test_cases=test_cases,
+            output_dir=run_dir,
+            timeout_seconds=args.timeout,
+            skip_grading=args.skip_grading
+        ))
 
-        # Print individual metric scores
-        if tr.get('scores'):
-            scores_display = ", ".join([f"{k.replace('metric_', 'M')}:{v}" for k, v in sorted(tr['scores'].items())])
-            print(f"      Scores: {scores_display}")
+        # Save summary
+        summary_file = run_dir / 'summary.json'
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            json.dump(results_summary, f, indent=2, ensure_ascii=False)
 
-        if tr.get('overall_notes'):
-            notes = tr['overall_notes'][:80]
-            print(f"      Notes: {notes}...")
+        all_run_results.append(results_summary)
+        total_errors += results_summary.get('errors', 0)
 
-    # Calculate and print overall statistics
-    if results_summary['grading_enabled']:
-        all_avg_scores = [tr['avg_score'] for tr in results_summary['test_results'] if tr.get('avg_score')]
+        # Print run summary
+        print(f"\n{'='*70}")
+        if num_runs > 1:
+            print(f"RUN {run_num}/{num_runs} COMPLETE")
+        else:
+            print("EVALUATION COMPLETE")
+        print("="*70)
+        print(f"Run ID: {results_summary['run_id']}")
+        print(f"Total tests: {results_summary['total_tests']}")
+        print(f"Completed: {results_summary['completed']}")
+        print(f"Errors: {results_summary['errors']}")
+        print(f"Grading: {'Enabled' if results_summary['grading_enabled'] else 'Disabled'}")
+        print(f"Results saved to: {run_dir}")
+        print("="*70)
+
+        # Print individual test results for this run
+        print("\nTest Results:")
+        print("-"*70)
+        for tr in results_summary['test_results']:
+            status = "✓" if not tr.get('error') else "✗"
+            duration = tr.get('duration_seconds', 0)
+            avg_score = tr.get('avg_score', None)
+
+            score_str = f" [Avg: {avg_score:.1f}/5]" if avg_score else ""
+            print(f"  {status} {tr['test_id']}: {duration:.2f}s{score_str}")
+
+            if tr.get('error'):
+                print(f"      Error: {tr['error'][:60]}...")
+
+            # Print individual metric scores
+            if tr.get('scores'):
+                scores_display = ", ".join([f"{k.replace('metric_', 'M')}:{v}" for k, v in sorted(tr['scores'].items())])
+                print(f"      Scores: {scores_display}")
+
+        # Print run's overall score
+        if results_summary['grading_enabled']:
+            all_avg_scores = [tr['avg_score'] for tr in results_summary['test_results'] if tr.get('avg_score')]
+            if all_avg_scores:
+                overall_avg = sum(all_avg_scores) / len(all_avg_scores)
+                print("\n" + "="*70)
+                print(f"RUN {run_num} AVERAGE SCORE: {overall_avg:.2f}/5")
+                print(f"Tests graded: {len(all_avg_scores)}/{results_summary['total_tests']}")
+                print("="*70)
+
+    # Multi-run aggregation
+    if num_runs > 1:
+        print("\n" + "="*70)
+        print("AGGREGATING RESULTS ACROSS ALL RUNS...")
+        print("="*70 + "\n")
+
+        aggregation = aggregate_multi_run_results(all_run_results, batch_dir)
+
+        # Print aggregated summary
+        print("\n" + "="*70)
+        print(f"MULTI-RUN EVALUATION COMPLETE ({num_runs} runs)")
+        print("="*70)
+        print(f"Batch directory: {batch_dir}")
+        print(f"Total runs: {num_runs}")
+        print(f"Total errors across all runs: {total_errors}")
+        print("="*70)
+
+        # Print aggregated test results
+        print("\nAggregated Test Scores (mean ± std dev):")
+        print("-"*70)
+        for test_stat in aggregation.get('test_statistics', []):
+            test_id = test_stat.get('test_id', 'Unknown')
+            overall = test_stat.get('overall', {})
+            mean = overall.get('mean', 0)
+            std = overall.get('std_dev', 0)
+            runs = test_stat.get('runs_with_scores', 0)
+            print(f"  {test_id}: {mean:.2f} ± {std:.2f} ({runs} runs)")
+
+        # Print category statistics
+        cat_stats = aggregation.get('category_statistics', {})
+        if cat_stats:
+            print("\nCategory Statistics:")
+            print("-"*70)
+            for category, stats in sorted(cat_stats.items()):
+                mean = stats.get('mean', 0)
+                std = stats.get('std_dev', 0)
+                count = stats.get('test_count', 0)
+                print(f"  {category}: {mean:.2f} ± {std:.2f} ({count} tests)")
+
+        # Print overall statistics
+        overall_stats = aggregation.get('overall_statistics', {})
+        if overall_stats:
+            print("\n" + "="*70)
+            print(f"OVERALL AGGREGATED SCORE: {overall_stats.get('mean', 0):.2f} ± {overall_stats.get('std_dev', 0):.2f}")
+            print(f"Score range: {overall_stats.get('min', 0):.2f} - {overall_stats.get('max', 0):.2f}")
+            print(f"Tests scored: {overall_stats.get('tests_scored', 0)}")
+            print("="*70)
+            print(f"\nSee {batch_dir / 'multi_run_aggregation.json'} for detailed statistics")
+            print(f"See {batch_dir / 'multi_run_scores.csv'} for CSV summary")
+        print("="*70)
+
+        return 0 if total_errors == 0 else 1
+
+    # Single run - print final analysis if available
+    results_summary = all_run_results[0] if all_run_results else {}
+    if results_summary.get('grading_enabled'):
+        all_avg_scores = [tr['avg_score'] for tr in results_summary.get('test_results', []) if tr.get('avg_score')]
         if all_avg_scores:
             overall_avg = sum(all_avg_scores) / len(all_avg_scores)
             print("\n" + "="*70)
             print(f"OVERALL AVERAGE SCORE: {overall_avg:.2f}/5")
-            print(f"Tests graded: {len(all_avg_scores)}/{results_summary['total_tests']}")
+            print(f"Tests graded: {len(all_avg_scores)}/{results_summary.get('total_tests', 0)}")
             print("="*70)
 
         # Print final analysis if available
