@@ -1,0 +1,19 @@
+[
+  {
+    "test_id": "TC-001",
+    "category": "Routing Decision",
+    "test_name": "Simple Factual Question Direct Response",
+    "test_prompt": "What is the capital of France?",
+    "expected_behavior": "Prime agent should answer directly without delegating to planning_agent. Response should be concise and accurate.",
+    "metric_1_name": "routing_correctness",
+    "metric_1_rubric": "1: Delegated when should have answered directly and made multiple unnecessary agent calls | 2: Delegated unnecessarily but recovered quickly | 3: Answered directly but with excessive preamble about process | 4: Answered directly with minor inefficiencies | 5: Perfectly routed - direct answer with no unnecessary delegation",
+    "metric_2_name": "response_accuracy",
+    "metric_2_rubric": "1: Factually incorrect answer | 2: Partially correct with significant errors | 3: Correct but incomplete or includes irrelevant info | 4: Correct with minor imperfections | 5: Fully accurate and appropriately scoped",
+    "metric_3_name": "response_latency_efficiency",
+    "metric_3_rubric": "1: Multiple unnecessary agent hops causing significant delays | 2: Some unnecessary routing overhead | 3: Acceptable path but not optimal | 4: Near-optimal routing | 5: Optimal path taken with minimal overhead",
+    "metric_4_name": "conciseness",
+    "metric_4_rubric": "1: Extremely verbose with irrelevant content | 2: Verbose with padding | 3: Adequate length but could be trimmer | 4: Concise with good information density | 5: Perfectly concise while complete",
+    "metric_5_name": "",
+    "metric_5_rubric": null
+  }
+]
