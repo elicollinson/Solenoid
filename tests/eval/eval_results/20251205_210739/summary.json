@@ -1,0 +1,17 @@
+{
+  "run_id": "20251205_210739",
+  "start_time": "2025-12-05T21:07:39.062370",
+  "total_tests": 1,
+  "completed": 1,
+  "errors": 0,
+  "test_results": [
+    {
+      "test_id": "TC-001",
+      "test_name": "Simple Factual Question Direct Response",
+      "duration_seconds": 4.225468,
+      "error": null,
+      "has_response": true
+    }
+  ],
+  "end_time": "2025-12-05T21:07:43.290649"
+}
