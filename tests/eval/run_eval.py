@@ -3,10 +3,10 @@
 Evaluation Test Runner for General Local Agent
 
 Runs all test cases from the CSV file, captures full conversation history,
-and saves results to structured folders for LLM-as-judge evaluation.
+grades outputs using LLM-as-judge, and saves results to structured folders.
 
 Usage:
-    poetry run python tests/eval/run_eval.py [--cases TC-001,TC-002] [--timeout 300]
+    poetry run python tests/eval/run_eval.py [--cases TC-001,TC-002] [--timeout 300] [--skip-grading]
 """
 
 import os
@@ -17,6 +17,7 @@ import yaml
 import asyncio
 import logging
 import argparse
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -28,6 +29,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+import litellm
 
 # Import the root agent (user_proxy_agent is the entry point)
 from app.agent.prime_agent.user_proxy import root_agent
@@ -39,6 +41,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 LOGGER = logging.getLogger(__name__)
+
+# Grading model configuration
+GRADING_MODEL = "ollama_chat/gpt-oss:20b"
 
 
 def load_test_cases(csv_path: Path) -> list[dict]:
@@ -147,6 +152,217 @@ def event_to_dict(event) -> dict:
             result['actions'] = actions_data
 
     return result
+
+
+def format_conversation_for_grading(conversation_history: list[dict]) -> str:
+    """Format conversation history into a readable string for grading."""
+    lines = []
+    for event in conversation_history:
+        author = event.get('author', 'unknown')
+        content = event.get('content', {})
+        parts = content.get('parts', [])
+
+        for part in parts:
+            if 'text' in part:
+                lines.append(f"[{author}]: {part['text']}")
+            if 'function_call' in part:
+                fc = part['function_call']
+                lines.append(f"[{author}] TOOL CALL: {fc['name']}({json.dumps(fc.get('args', {}))})")
+            if 'function_response' in part:
+                fr = part['function_response']
+                response_str = json.dumps(fr.get('response', {}), default=str)[:500]
+                lines.append(f"[{author}] TOOL RESPONSE ({fr['name']}): {response_str}")
+
+        # Show agent transfers
+        actions = event.get('actions', {})
+        if 'transfer_to_agent' in actions:
+            lines.append(f"[{author}] TRANSFER TO: {actions['transfer_to_agent']}")
+
+    return "\n".join(lines)
+
+
+def build_grading_prompt(test_result: dict) -> str:
+    """Build the prompt for LLM-as-judge grading."""
+    metrics = test_result.get('metrics', {})
+
+    # Build metrics section
+    metrics_section = []
+    for i in range(1, 6):
+        metric = metrics.get(f'metric_{i}', {})
+        name = metric.get('name', '')
+        rubric = metric.get('rubric', '')
+        if name and rubric:
+            metrics_section.append(f"""
+METRIC {i}: {name}
+RUBRIC: {rubric}
+""")
+
+    metrics_text = "\n".join(metrics_section) if metrics_section else "No metrics defined."
+
+    # Format conversation
+    conversation_text = format_conversation_for_grading(
+        test_result.get('conversation_history', [])
+    )
+
+    # Truncate if too long
+    if len(conversation_text) > 8000:
+        conversation_text = conversation_text[:8000] + "\n... [TRUNCATED]"
+
+    prompt = f"""You are an expert evaluator grading an AI agent system's performance on a test case.
+
+## TEST CASE INFORMATION
+
+**Test ID**: {test_result.get('test_id', 'Unknown')}
+**Test Name**: {test_result.get('test_name', 'Unknown')}
+**Category**: {test_result.get('category', 'Unknown')}
+
+**User Prompt**:
+{test_result.get('test_prompt', 'No prompt')}
+
+**Expected Behavior**:
+{test_result.get('expected_behavior', 'No expected behavior specified')}
+
+**Execution Error** (if any):
+{test_result.get('execution', {}).get('error', 'None')}
+
+**Final Response**:
+{test_result.get('final_response', 'No response')}
+
+## FULL CONVERSATION HISTORY
+
+{conversation_text}
+
+## METRICS TO EVALUATE
+
+{metrics_text}
+
+## YOUR TASK
+
+Evaluate the agent's performance on each metric using the provided rubrics. Each metric uses a 1-5 scale where:
+- 1 = Poor/Failed
+- 2 = Below expectations
+- 3 = Meets basic expectations
+- 4 = Good performance
+- 5 = Excellent performance
+
+You MUST respond with ONLY a valid JSON object in this exact format (no other text before or after):
+
+```json
+{{
+  "grades": {{
+    "metric_1": {{
+      "score": <1-5>,
+      "justification": "<brief 1-2 sentence explanation>"
+    }},
+    "metric_2": {{
+      "score": <1-5>,
+      "justification": "<brief 1-2 sentence explanation>"
+    }},
+    "metric_3": {{
+      "score": <1-5>,
+      "justification": "<brief 1-2 sentence explanation>"
+    }},
+    "metric_4": {{
+      "score": <1-5>,
+      "justification": "<brief 1-2 sentence explanation>"
+    }},
+    "metric_5": {{
+      "score": <1-5 or null if metric not applicable>,
+      "justification": "<brief explanation or null>"
+    }}
+  }},
+  "overall_notes": "<1-2 sentences summarizing overall performance>"
+}}
+```
+
+If a metric has no name/rubric defined, set its score to null.
+
+Respond with ONLY the JSON object, no additional text."""
+
+    return prompt
+
+
+def extract_json_from_response(text: str) -> Optional[dict]:
+    """Extract JSON from LLM response, handling markdown code blocks."""
+    # Try to find JSON in code blocks first
+    code_block_pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
+    matches = re.findall(code_block_pattern, text, re.DOTALL)
+
+    for match in matches:
+        try:
+            return json.loads(match.strip())
+        except json.JSONDecodeError:
+            continue
+
+    # Try to find raw JSON object
+    json_pattern = r'\{[\s\S]*\}'
+    matches = re.findall(json_pattern, text)
+
+    for match in matches:
+        try:
+            return json.loads(match)
+        except json.JSONDecodeError:
+            continue
+
+    # Last resort: try parsing the whole thing
+    try:
+        return json.loads(text.strip())
+    except json.JSONDecodeError:
+        return None
+
+
+async def grade_test_result(test_result: dict, max_retries: int = 3) -> dict:
+    """Grade a test result using LLM-as-judge."""
+    prompt = build_grading_prompt(test_result)
+
+    for attempt in range(max_retries):
+        try:
+            LOGGER.info(f"Grading {test_result.get('test_id')} (attempt {attempt + 1}/{max_retries})")
+
+            response = await litellm.acompletion(
+                model=GRADING_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert AI evaluator. You respond only with valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.1,  # Low temperature for consistent grading
+                num_ctx=16000,
+            )
+
+            response_text = response.choices[0].message.content
+
+            # Parse the JSON response
+            grades = extract_json_from_response(response_text)
+
+            if grades and 'grades' in grades:
+                LOGGER.info(f"Successfully graded {test_result.get('test_id')}")
+                return {
+                    'success': True,
+                    'grades': grades.get('grades', {}),
+                    'overall_notes': grades.get('overall_notes', ''),
+                    'raw_response': response_text,
+                    'attempt': attempt + 1
+                }
+            else:
+                LOGGER.warning(f"Invalid JSON structure in grading response (attempt {attempt + 1})")
+
+        except Exception as e:
+            LOGGER.error(f"Grading error (attempt {attempt + 1}): {e}")
+
+    # Return failure after all retries
+    return {
+        'success': False,
+        'grades': {},
+        'overall_notes': 'Grading failed after all retries',
+        'raw_response': None,
+        'attempt': max_retries
+    }
 
 
 async def run_single_test(
@@ -268,12 +484,236 @@ async def run_single_test(
     return result
 
 
+def build_final_summary_prompt(results_summary: dict) -> str:
+    """Build prompt for final summary analysis."""
+    # Build a table of results
+    results_table = []
+    for tr in results_summary.get('test_results', []):
+        row = {
+            'test_id': tr.get('test_id'),
+            'category': tr.get('category', 'Unknown'),
+            'test_name': tr.get('test_name', 'Unknown'),
+            'error': tr.get('error'),
+            'avg_score': tr.get('avg_score'),
+            'scores': tr.get('scores', {}),
+            'notes': tr.get('overall_notes', '')
+        }
+        results_table.append(row)
+
+    results_json = json.dumps(results_table, indent=2, default=str)
+
+    prompt = f"""You are an expert evaluator analyzing the results of an AI agent system evaluation.
+
+## EVALUATION SUMMARY
+
+**Run ID**: {results_summary.get('run_id', 'Unknown')}
+**Total Tests**: {results_summary.get('total_tests', 0)}
+**Completed**: {results_summary.get('completed', 0)}
+**Errors**: {results_summary.get('errors', 0)}
+
+## TEST RESULTS
+
+{results_json}
+
+## YOUR TASK
+
+Analyze these evaluation results and provide a comprehensive summary. Your analysis should include:
+
+1. **Overall Performance**: How well did the agent system perform overall?
+2. **Strengths**: What did the agent system do well? Which categories or capabilities showed strong performance?
+3. **Weaknesses**: Where did the agent system struggle? What patterns of failure emerged?
+4. **Category Analysis**: Break down performance by test category (Routing Decision, Planning Quality, Error Handling, etc.)
+5. **Critical Issues**: Are there any critical bugs or failures that need immediate attention?
+6. **Recommendations**: What specific improvements would have the biggest impact?
+
+Respond with a JSON object in this exact format:
+
+```json
+{{
+  "overall_score": <average score across all tests, 1-5 scale>,
+  "performance_summary": "<2-3 sentence overall assessment>",
+  "strengths": [
+    "<strength 1>",
+    "<strength 2>"
+  ],
+  "weaknesses": [
+    "<weakness 1>",
+    "<weakness 2>"
+  ],
+  "category_breakdown": {{
+    "<category name>": {{
+      "avg_score": <number>,
+      "test_count": <number>,
+      "assessment": "<1 sentence assessment>"
+    }}
+  }},
+  "critical_issues": [
+    "<critical issue if any, or empty array>"
+  ],
+  "recommendations": [
+    {{
+      "priority": "high|medium|low",
+      "area": "<area to improve>",
+      "suggestion": "<specific suggestion>"
+    }}
+  ],
+  "detailed_analysis": "<2-3 paragraph detailed analysis>"
+}}
+```
+
+Respond with ONLY the JSON object."""
+
+    return prompt
+
+
+async def generate_final_summary(results_summary: dict) -> dict:
+    """Generate a final summary analysis using LLM."""
+    prompt = build_final_summary_prompt(results_summary)
+
+    for attempt in range(3):
+        try:
+            LOGGER.info(f"Generating final summary (attempt {attempt + 1}/3)")
+
+            response = await litellm.acompletion(
+                model=GRADING_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert AI evaluator. You respond only with valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.2,
+                num_ctx=16000,
+            )
+
+            response_text = response.choices[0].message.content
+            summary = extract_json_from_response(response_text)
+
+            if summary and 'performance_summary' in summary:
+                LOGGER.info("Successfully generated final summary")
+                return {
+                    'success': True,
+                    'analysis': summary,
+                    'raw_response': response_text
+                }
+            else:
+                LOGGER.warning(f"Invalid summary structure (attempt {attempt + 1})")
+
+        except Exception as e:
+            LOGGER.error(f"Summary generation error (attempt {attempt + 1}): {e}")
+
+    return {
+        'success': False,
+        'analysis': {},
+        'raw_response': None
+    }
+
+
+def save_aggregated_scores(results_summary: dict, output_dir: Path):
+    """Save aggregated scores to CSV and JSON files."""
+    # Prepare data for CSV
+    csv_rows = []
+    for tr in results_summary.get('test_results', []):
+        row = {
+            'test_id': tr.get('test_id', ''),
+            'category': tr.get('category', ''),
+            'test_name': tr.get('test_name', ''),
+            'duration_seconds': tr.get('duration_seconds', 0),
+            'error': 'Yes' if tr.get('error') else 'No',
+            'avg_score': tr.get('avg_score', ''),
+        }
+
+        # Add individual metric scores
+        scores = tr.get('scores', {})
+        for i in range(1, 6):
+            metric_key = f'metric_{i}'
+            row[f'score_m{i}'] = scores.get(metric_key, '')
+
+        row['notes'] = tr.get('overall_notes', '')[:200]  # Truncate notes
+        csv_rows.append(row)
+
+    # Save as CSV
+    csv_file = output_dir / 'scores.csv'
+    if csv_rows:
+        fieldnames = ['test_id', 'category', 'test_name', 'duration_seconds', 'error',
+                      'avg_score', 'score_m1', 'score_m2', 'score_m3', 'score_m4', 'score_m5', 'notes']
+        with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(csv_rows)
+        LOGGER.info(f"Saved aggregated scores to {csv_file}")
+
+    # Save detailed JSON aggregation
+    json_file = output_dir / 'scores.json'
+    aggregation = {
+        'run_id': results_summary.get('run_id'),
+        'timestamp': datetime.now().isoformat(),
+        'summary_stats': {},
+        'category_stats': {},
+        'test_scores': []
+    }
+
+    # Calculate summary statistics
+    all_scores = []
+    category_scores = {}
+    for tr in results_summary.get('test_results', []):
+        category = tr.get('category', 'Unknown')
+        avg_score = tr.get('avg_score')
+
+        if avg_score is not None:
+            all_scores.append(avg_score)
+            if category not in category_scores:
+                category_scores[category] = []
+            category_scores[category].append(avg_score)
+
+        aggregation['test_scores'].append({
+            'test_id': tr.get('test_id'),
+            'category': category,
+            'test_name': tr.get('test_name'),
+            'avg_score': avg_score,
+            'scores': tr.get('scores', {}),
+            'error': tr.get('error'),
+            'notes': tr.get('overall_notes', '')
+        })
+
+    # Summary stats
+    if all_scores:
+        aggregation['summary_stats'] = {
+            'total_tests': len(results_summary.get('test_results', [])),
+            'tests_graded': len(all_scores),
+            'overall_avg': round(sum(all_scores) / len(all_scores), 2),
+            'min_score': min(all_scores),
+            'max_score': max(all_scores),
+            'tests_with_errors': results_summary.get('errors', 0)
+        }
+
+    # Category stats
+    for category, scores in category_scores.items():
+        aggregation['category_stats'][category] = {
+            'test_count': len(scores),
+            'avg_score': round(sum(scores) / len(scores), 2),
+            'min_score': min(scores),
+            'max_score': max(scores)
+        }
+
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(aggregation, f, indent=2, ensure_ascii=False)
+    LOGGER.info(f"Saved detailed score aggregation to {json_file}")
+
+    return aggregation
+
+
 async def run_evaluation(
     test_cases: list[dict],
     output_dir: Path,
-    timeout_seconds: int = 300
+    timeout_seconds: int = 300,
+    skip_grading: bool = False
 ) -> dict:
-    """Run all test cases and save results."""
+    """Run all test cases, grade them, and save results."""
     app_name = "AgentEvaluation"
 
     results_summary = {
@@ -282,6 +722,7 @@ async def run_evaluation(
         'total_tests': len(test_cases),
         'completed': 0,
         'errors': 0,
+        'grading_enabled': not skip_grading,
         'test_results': []
     }
 
@@ -290,11 +731,19 @@ async def run_evaluation(
         LOGGER.info(f"Progress: {i}/{len(test_cases)} - {test_id}")
 
         try:
+            # Run the test
             result = await run_single_test(
                 test_case=test_case,
                 app_name=app_name,
                 timeout_seconds=timeout_seconds
             )
+
+            # Grade the result if enabled
+            if not skip_grading:
+                grading_result = await grade_test_result(result)
+                result['grading'] = grading_result
+            else:
+                result['grading'] = {'success': False, 'grades': {}, 'overall_notes': 'Grading skipped'}
 
             # Save individual test result
             result_file = output_dir / f"{test_id}.json"
@@ -305,13 +754,32 @@ async def run_evaluation(
             if result['execution']['error']:
                 results_summary['errors'] += 1
 
-            results_summary['test_results'].append({
+            # Build summary entry
+            summary_entry = {
                 'test_id': test_id,
                 'test_name': result['test_name'],
+                'category': result['category'],
                 'duration_seconds': result['execution']['duration_seconds'],
                 'error': result['execution']['error'],
-                'has_response': result['final_response'] is not None
-            })
+                'has_response': result['final_response'] is not None,
+            }
+
+            # Add grading scores to summary
+            if result.get('grading', {}).get('success'):
+                grades = result['grading'].get('grades', {})
+                scores = {}
+                for metric_key, metric_data in grades.items():
+                    if isinstance(metric_data, dict) and metric_data.get('score') is not None:
+                        scores[metric_key] = metric_data['score']
+                summary_entry['scores'] = scores
+                summary_entry['overall_notes'] = result['grading'].get('overall_notes', '')
+
+                # Calculate average score
+                valid_scores = [s for s in scores.values() if isinstance(s, (int, float))]
+                if valid_scores:
+                    summary_entry['avg_score'] = round(sum(valid_scores) / len(valid_scores), 2)
+
+            results_summary['test_results'].append(summary_entry)
 
         except Exception as e:
             LOGGER.error(f"Failed to run {test_id}: {e}", exc_info=True)
@@ -322,6 +790,23 @@ async def run_evaluation(
             })
 
     results_summary['end_time'] = datetime.now().isoformat()
+
+    # Save aggregated scores
+    LOGGER.info("Saving aggregated scores...")
+    aggregation = save_aggregated_scores(results_summary, output_dir)
+    results_summary['aggregation'] = aggregation.get('summary_stats', {})
+
+    # Generate final summary analysis if grading was enabled
+    if not skip_grading and results_summary['completed'] > 0:
+        LOGGER.info("Generating final summary analysis...")
+        final_summary = await generate_final_summary(results_summary)
+        results_summary['final_analysis'] = final_summary
+
+        # Save final analysis separately
+        analysis_file = output_dir / 'final_analysis.json'
+        with open(analysis_file, 'w', encoding='utf-8') as f:
+            json.dump(final_summary, f, indent=2, ensure_ascii=False)
+        LOGGER.info(f"Saved final analysis to {analysis_file}")
 
     return results_summary
 
@@ -345,6 +830,11 @@ def main():
         type=str,
         default=None,
         help='Path to test cases CSV file (default: tests/eval/agent_test_cases.csv)'
+    )
+    parser.add_argument(
+        '--skip-grading',
+        action='store_true',
+        help='Skip LLM-as-judge grading step'
     )
     args = parser.parse_args()
 
@@ -392,10 +882,16 @@ def main():
 
     # Run evaluation
     LOGGER.info(f"Starting evaluation of {len(test_cases)} test cases...")
+    if not args.skip_grading:
+        LOGGER.info(f"LLM grading enabled using model: {GRADING_MODEL}")
+    else:
+        LOGGER.info("LLM grading disabled")
+
     results_summary = asyncio.run(run_evaluation(
         test_cases=test_cases,
         output_dir=run_dir,
-        timeout_seconds=args.timeout
+        timeout_seconds=args.timeout,
+        skip_grading=args.skip_grading
     ))
 
     # Save summary
@@ -404,24 +900,88 @@ def main():
         json.dump(results_summary, f, indent=2, ensure_ascii=False)
 
     # Print summary
-    print("\n" + "="*60)
+    print("\n" + "="*70)
     print("EVALUATION COMPLETE")
-    print("="*60)
+    print("="*70)
     print(f"Run ID: {results_summary['run_id']}")
     print(f"Total tests: {results_summary['total_tests']}")
     print(f"Completed: {results_summary['completed']}")
     print(f"Errors: {results_summary['errors']}")
+    print(f"Grading: {'Enabled' if results_summary['grading_enabled'] else 'Disabled'}")
     print(f"Results saved to: {run_dir}")
-    print("="*60)
+    print("="*70)
 
-    # Print individual test results
+    # Print individual test results with grades
     print("\nTest Results:")
+    print("-"*70)
     for tr in results_summary['test_results']:
         status = "✓" if not tr.get('error') else "✗"
         duration = tr.get('duration_seconds', 0)
-        print(f"  {status} {tr['test_id']}: {duration:.2f}s")
+        avg_score = tr.get('avg_score', None)
+
+        score_str = f" [Avg: {avg_score:.1f}/5]" if avg_score else ""
+        print(f"  {status} {tr['test_id']}: {duration:.2f}s{score_str}")
+
         if tr.get('error'):
-            print(f"      Error: {tr['error'][:80]}...")
+            print(f"      Error: {tr['error'][:60]}...")
+
+        # Print individual metric scores
+        if tr.get('scores'):
+            scores_display = ", ".join([f"{k.replace('metric_', 'M')}:{v}" for k, v in sorted(tr['scores'].items())])
+            print(f"      Scores: {scores_display}")
+
+        if tr.get('overall_notes'):
+            notes = tr['overall_notes'][:80]
+            print(f"      Notes: {notes}...")
+
+    # Calculate and print overall statistics
+    if results_summary['grading_enabled']:
+        all_avg_scores = [tr['avg_score'] for tr in results_summary['test_results'] if tr.get('avg_score')]
+        if all_avg_scores:
+            overall_avg = sum(all_avg_scores) / len(all_avg_scores)
+            print("\n" + "="*70)
+            print(f"OVERALL AVERAGE SCORE: {overall_avg:.2f}/5")
+            print(f"Tests graded: {len(all_avg_scores)}/{results_summary['total_tests']}")
+            print("="*70)
+
+        # Print final analysis if available
+        final_analysis = results_summary.get('final_analysis', {})
+        if final_analysis.get('success'):
+            analysis = final_analysis.get('analysis', {})
+            print("\n" + "="*70)
+            print("FINAL ANALYSIS")
+            print("="*70)
+
+            if analysis.get('performance_summary'):
+                print(f"\n{analysis['performance_summary']}")
+
+            if analysis.get('strengths'):
+                print("\nStrengths:")
+                for s in analysis['strengths'][:3]:
+                    print(f"  + {s}")
+
+            if analysis.get('weaknesses'):
+                print("\nWeaknesses:")
+                for w in analysis['weaknesses'][:3]:
+                    print(f"  - {w}")
+
+            if analysis.get('critical_issues'):
+                print("\nCritical Issues:")
+                for issue in analysis['critical_issues'][:3]:
+                    print(f"  ! {issue}")
+
+            if analysis.get('recommendations'):
+                print("\nTop Recommendations:")
+                for rec in analysis['recommendations'][:3]:
+                    priority = rec.get('priority', 'medium').upper()
+                    area = rec.get('area', '')
+                    suggestion = rec.get('suggestion', '')
+                    print(f"  [{priority}] {area}: {suggestion[:60]}...")
+
+            print("\n" + "="*70)
+            print("See final_analysis.json for detailed analysis")
+            print("See scores.csv and scores.json for aggregated scores")
+            print("="*70)
 
     return 0 if results_summary['errors'] == 0 else 1
 
