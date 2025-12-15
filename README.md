@@ -406,3 +406,4 @@ search:
 2.  **SerpAPI**: Requires a SerpAPI key.
 3.  **Brave Search**: Requires a Brave Search API key.
 
+poetry run python tests/eval/run_eval.py --runs 5
