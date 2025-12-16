@@ -1,10 +1,10 @@
 models:
   default:
-    name: "qwen3:8b"
+    name: "ministral-3:8b"
     provider: "ollama_chat"
     context_length: 128000
   agent:
-    name: "qwen3:8b"
+    name: "ministral-3:8b"
     context_length: 128000
   extractor:
     name: "ministral-3:8b"
