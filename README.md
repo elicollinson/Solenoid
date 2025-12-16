@@ -407,3 +407,57 @@ search:
 3.  **Brave Search**: Requires a Brave Search API key.
 
 poetry run python tests/eval/run_eval.py --runs 5
+
+
+  app/ui/agui/types.py - AG-UI event types:
+  - EventType enum with all AG-UI protocol event types
+  - Dataclasses for: RunStartedEvent, RunFinishedEvent, TextMessageStartEvent, TextMessageContentEvent, TextMessageEndEvent, ToolCallStartEvent,
+  ToolCallArgsEvent, ToolCallEndEvent
+  - parse_event() function to convert raw JSON to typed events
+
+  app/ui/agui/client.py - Streaming client:
+  - AGUIStreamClient - Async httpx client that streams AG-UI SSE events
+  - ConversationState - Helper for tracking message state across events
+  - SSE parsing with support for the data: line format
+
+  app/ui/agui/__init__.py - Package exports
+
+  Updated Files
+
+  app/ui/message_list/__init__.py:
+  - New StreamingMarkdown widget with visual streaming indicator
+  - Methods: start_streaming_message(), append_to_message(), end_streaming_message()
+  - Helper methods: add_user_message(), add_system_message(), add_tool_call_indicator()
+
+  app/ui/agent_app.py:
+  - Uses async @work decorator for non-blocking streaming
+  - Handles all AG-UI event types: RUN_STARTED, TEXT_MESSAGE_START/CONTENT/END, TOOL_CALL_START/END, RUN_FINISHED
+  - New StatusBar widget showing connection state
+  - Configurable base_url and endpoint for connecting to any AG-UI backend
+  - Keybindings: Ctrl+C quit, Ctrl+L clear
+
+  Usage
+
+  The app connects to http://localhost:8000/api/agent by default (your existing AG-UI server):
+
+  # Start the server first
+  uvicorn app.server.main:app --port 8000
+
+  # Run the TUI client
+  python -m app.main
+
+  Or configure a different endpoint:
+  AgentApp(base_url="http://other-host:3000", endpoint="/api/agent").run()
+
+  Sources:
+  - https://docs.ag-ui.com/concepts/messages
+  - https://www.copilotkit.ai/blog/master-the-17-ag-ui-event-types-for-building-agents-the-right-way
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>  
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle)
+
+
+
+
