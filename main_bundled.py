@@ -22,6 +22,7 @@ logging.basicConfig(level=logging.ERROR, force=True)
 logging.getLogger().setLevel(logging.ERROR)
 
 # Now safe to import other modules
+import json
 import signal
 import threading
 import time
@@ -33,6 +34,8 @@ import uvicorn
 
 # Configuration
 BACKEND_HOST = "127.0.0.1"
+OLLAMA_HOST = "127.0.0.1"
+OLLAMA_PORT = 11434
 HOME_SETTINGS_PATH = Path.home() / "app_settings.yaml"
 
 DEFAULT_SETTINGS = '''models:
@@ -641,6 +644,183 @@ HEALTH_CHECK_TIMEOUT = 30  # seconds
 HEALTH_CHECK_INTERVAL = 0.2  # seconds
 
 
+# =============================================================================
+# Pre-flight: Ollama and Model Management
+# =============================================================================
+
+def ensure_ollama_running() -> bool:
+    """
+    Ensure Ollama server is running. Starts it if needed.
+
+    Returns:
+        True if Ollama is running, False if failed to start
+    """
+    # Check if already running
+    try:
+        r = httpx.get(f"http://{OLLAMA_HOST}:{OLLAMA_PORT}/api/tags", timeout=1.0)
+        if r.status_code == 200:
+            return True
+    except:
+        pass
+
+    # Try to start Ollama using the app's existing logic
+    try:
+        from app.agent.ollama.ollama_app import start_ollama_server
+        start_ollama_server(host=OLLAMA_HOST, port=OLLAMA_PORT)
+        return True
+    except Exception as e:
+        print(f"Failed to start Ollama: {e}", file=sys.stderr)
+        return False
+
+
+def get_configured_model() -> str:
+    """Get the model name from settings."""
+    import yaml
+
+    # Try local project settings first, then home directory fallback
+    settings_paths = [Path("app_settings.yaml"), HOME_SETTINGS_PATH]
+
+    for path in settings_paths:
+        if path.exists():
+            try:
+                with open(path) as f:
+                    config = yaml.safe_load(f) or {}
+                    model_name = config.get("models", {}).get("default", {}).get("name")
+                    if model_name:
+                        return model_name
+            except:
+                pass
+
+    # Fallback only if no settings file found
+    return "ministral-3:8b"
+
+
+def check_model_exists(model_name: str) -> bool:
+    """Check if the model is already available in Ollama."""
+    try:
+        r = httpx.get(f"http://{OLLAMA_HOST}:{OLLAMA_PORT}/api/tags", timeout=5.0)
+        if r.status_code == 200:
+            models = r.json().get("models", [])
+            return any(m.get("name") == model_name for m in models)
+    except:
+        pass
+    return False
+
+
+def pull_model_with_progress(model_name: str) -> bool:
+    """
+    Pull a model from Ollama with streaming progress display.
+
+    Returns:
+        True if successful, False otherwise
+    """
+    print(f"Downloading model '{model_name}'...")
+    print("This may take several minutes depending on model size and connection speed.\n")
+
+    url = f"http://{OLLAMA_HOST}:{OLLAMA_PORT}/api/pull"
+
+    try:
+        # Use streaming to show progress
+        with httpx.stream(
+            "POST",
+            url,
+            json={"name": model_name, "stream": True},
+            timeout=None,  # No timeout for large downloads
+        ) as response:
+            if response.status_code != 200:
+                print(f"Error: Server returned {response.status_code}", file=sys.stderr)
+                return False
+
+            last_status = ""
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    status = data.get("status", "")
+
+                    # Show download progress
+                    if "total" in data and "completed" in data:
+                        total = data["total"]
+                        completed = data["completed"]
+                        pct = (completed / total * 100) if total > 0 else 0
+                        bar_len = 30
+                        filled = int(bar_len * completed / total) if total > 0 else 0
+                        bar = "█" * filled + "░" * (bar_len - filled)
+                        size_mb = completed / (1024 * 1024)
+                        total_mb = total / (1024 * 1024)
+                        print(f"\r  {status}: [{bar}] {pct:5.1f}% ({size_mb:.0f}/{total_mb:.0f} MB)", end="", flush=True)
+                    elif status and status != last_status:
+                        # Status changed, print on new line
+                        if last_status:
+                            print()  # End previous line
+                        print(f"  {status}...", end="", flush=True)
+                        last_status = status
+
+                    # Check for completion
+                    if status == "success":
+                        print()  # End line
+                        print(f"\nModel '{model_name}' ready!")
+                        return True
+
+                except json.JSONDecodeError:
+                    continue
+
+            print()  # End line
+            return True
+
+    except httpx.ConnectError:
+        print(f"Error: Cannot connect to Ollama at {OLLAMA_HOST}:{OLLAMA_PORT}", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"\nError downloading model: {e}", file=sys.stderr)
+        return False
+
+
+def ensure_model_ready() -> bool:
+    """
+    Pre-flight check: ensure Ollama is running and model is available.
+    Shows progress during model download if needed.
+
+    Returns:
+        True if model is ready, False otherwise
+    """
+    print("Initializing Local Agent...")
+
+    # Step 1: Ensure Ollama is running
+    print("  Checking Ollama server...", end=" ", flush=True)
+    if not ensure_ollama_running():
+        print("FAILED")
+        print("\nError: Could not start Ollama server.", file=sys.stderr)
+        print("Please install Ollama from https://ollama.com/download", file=sys.stderr)
+        return False
+    print("OK")
+
+    # Step 2: Check if model exists
+    model_name = get_configured_model()
+    print(f"  Checking model '{model_name}'...", end=" ", flush=True)
+
+    if check_model_exists(model_name):
+        print("OK")
+        print()
+        return True
+
+    print("not found")
+    print()
+
+    # Step 3: Pull the model with progress
+    if not pull_model_with_progress(model_name):
+        print(f"\nError: Failed to download model '{model_name}'", file=sys.stderr)
+        return False
+
+    print()
+    return True
+
+
+# =============================================================================
+# Settings and Logging
+# =============================================================================
+
 def ensure_settings_file() -> None:
     """Create default app_settings.yaml in home directory if it doesn't exist."""
     if not HOME_SETTINGS_PATH.exists():
@@ -761,6 +941,11 @@ def main() -> int:
     """
     # Ensure settings file exists in home directory
     ensure_settings_file()
+
+    # Pre-flight: ensure Ollama and model are ready BEFORE starting backend
+    # This prevents the health check from timing out during model downloads
+    if not ensure_model_ready():
+        return 1
 
     # Suppress backend logging for clean frontend experience
     suppress_logging()
