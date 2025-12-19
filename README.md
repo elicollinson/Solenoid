@@ -26,14 +26,14 @@ Each time those conditions are met the service asks the current model to emit a 
 
 ## Installation
 
-This project uses `uv` for dependency management:
+This project uses `poetry` for dependency management:
 
 ```bash
-# Install dependencies
-uv sync
+# Install dependencies (creates the virtual environment)
+poetry install
 
 # Run the application
-uv run python -m local_general_agent.main
+poetry run python -m local_general_agent.main
 ```
 
 ## Usage
@@ -41,7 +41,7 @@ uv run python -m local_general_agent.main
 ### Running the App
 
 ```bash
-uv run python -m local_general_agent.main
+poetry run python -m local_general_agent.main
 ```
 
 ### Built-in Commands
@@ -193,6 +193,37 @@ When the Google ADK backend is selected the service now boots a local memory sta
 
 Everything runs locally on macOS (M3+) as long as the dependencies listed in the “Implementation Prompt” are installed (torch, sentence-transformers, sqlite-vec, FlagEmbedding, numpy). If your system Python cannot load extensions, install `pysqlite3-binary` and set `PYTHONPATH` accordingly.
 
+### Model Context Protocol (MCP) Support
+
+The agent supports the Model Context Protocol (MCP), allowing you to dynamically extend its capabilities with external tools. You can configure MCP servers using a `mcp_config.yaml` file in the root of the repository.
+
+#### Configuration
+
+Create a `mcp_config.yaml` file in the project root. The file should define the MCP servers you want to connect to.
+
+**Example `mcp_config.yaml`:**
+
+```yaml
+mcp_servers:
+  filesystem:
+    command: "npx"
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "./"
+```
+
+In this example:
+- `filesystem` is the name of the server (used for logging).
+- `command` is the executable to run (e.g., `npx`, `python`).
+- `args` is a list of arguments to pass to the command.
+
+#### How it Works
+
+When the agent starts, it checks for `mcp_config.yaml`. If found, it initializes the configured MCP servers and adds their tools to the agent's toolset. This allows the agent to use these tools seamlessly during conversations.
+
+For example, with the filesystem server configured above, the agent can use tools like `list_directory` and `read_file` to interact with your local files.
+
 ### Extending the App
 
 You can extend the `TerminalApp` class to add custom functionality:
@@ -279,8 +310,8 @@ if command == "mytools":
 
 ### Requirements
 
-- Python 3.13+
-- uv (for dependency management)
+- Python 3.10+
+- Poetry (for dependency management)
 
 ### Dependencies
 
@@ -304,3 +335,129 @@ Textual provides several advantages over other terminal UI libraries:
 - Color scheme based on [Solarized](https://ethanschoonover.com/solarized/)
 - Built with [Textual](https://github.com/textualize/textual)
 - Rich formatting from [Rich](https://github.com/Textualize/rich)
+
+## Model Configuration
+
+The application allows you to configure which models are used for different roles (agent, memory extractor, etc.) via a YAML configuration file.
+
+### Configuration File
+
+Create a file named `app_settings.yaml` in the root directory of the project. If this file is not present, the application defaults to using `granite4:tiny-h` for all roles.
+
+**Example `app_settings.yaml`:**
+
+```yaml
+models:
+  default:
+    name: "granite4:tiny-h"
+    provider: "ollama_chat"
+  agent:
+    name: "granite4:tiny-h"
+    # provider defaults to "ollama_chat" if not specified
+  extractor:
+    name: "granite4:tiny-h"
+```
+
+### Model Requirements
+
+The models used for the **agent** role must support **function calling** (tool use). This is critical because the agent relies on tools to interact with the memory system and other extensions.
+
+- **Recommended Models**: `granite4:tiny-h`, `llama3.1`, `mistral-nemo`, or other models known to have strong function calling capabilities.
+- **Ollama Names**: Use the exact model name as it appears in the [Ollama library](https://ollama.com/library).
+
+### Automatic Model Pulling
+
+If a configured model is not found in your local Ollama instance, the application will automatically attempt to pull it when the agent starts. This ensures that the required models are always available without manual intervention.
+
+## Search Configuration
+
+The application includes a `research_agent` capable of performing web searches and retrieving page content. This functionality is configured via the `app_settings.yaml` file.
+
+### Search Settings
+
+Add a `search` section to your `app_settings.yaml` to configure the search provider.
+
+**Example `app_settings.yaml` with search:**
+
+```yaml
+models:
+  default:
+    name: "ministral-3:8b"
+    provider: "ollama_chat"
+
+search:
+  # Provider can be "google_cse", "serpapi_google", or "brave"
+  search_provider: "google_cse"
+  
+  # For Google CSE
+  google_cse_api_key: "YOUR_GOOGLE_API_KEY"
+  google_cse_cx: "YOUR_CUSTOM_SEARCH_ENGINE_ID"
+  
+  # For SerpAPI
+  # serpapi_api_key: "YOUR_SERPAPI_KEY"
+  
+  # For Brave Search
+  # brave_search_api_key: "YOUR_BRAVE_API_KEY"
+```
+
+### Supported Providers
+
+1.  **Google Custom Search Engine (CSE)**: Requires an API Key and a Custom Search Engine ID (CX).
+2.  **SerpAPI**: Requires a SerpAPI key.
+3.  **Brave Search**: Requires a Brave Search API key.
+
+poetry run python tests/eval/run_eval.py --runs 5
+
+
+  app/ui/agui/types.py - AG-UI event types:
+  - EventType enum with all AG-UI protocol event types
+  - Dataclasses for: RunStartedEvent, RunFinishedEvent, TextMessageStartEvent, TextMessageContentEvent, TextMessageEndEvent, ToolCallStartEvent,
+  ToolCallArgsEvent, ToolCallEndEvent
+  - parse_event() function to convert raw JSON to typed events
+
+  app/ui/agui/client.py - Streaming client:
+  - AGUIStreamClient - Async httpx client that streams AG-UI SSE events
+  - ConversationState - Helper for tracking message state across events
+  - SSE parsing with support for the data: line format
+
+  app/ui/agui/__init__.py - Package exports
+
+  Updated Files
+
+  app/ui/message_list/__init__.py:
+  - New StreamingMarkdown widget with visual streaming indicator
+  - Methods: start_streaming_message(), append_to_message(), end_streaming_message()
+  - Helper methods: add_user_message(), add_system_message(), add_tool_call_indicator()
+
+  app/ui/agent_app.py:
+  - Uses async @work decorator for non-blocking streaming
+  - Handles all AG-UI event types: RUN_STARTED, TEXT_MESSAGE_START/CONTENT/END, TOOL_CALL_START/END, RUN_FINISHED
+  - New StatusBar widget showing connection state
+  - Configurable base_url and endpoint for connecting to any AG-UI backend
+  - Keybindings: Ctrl+C quit, Ctrl+L clear
+
+  Usage
+
+  The app connects to http://localhost:8000/api/agent by default (your existing AG-UI server):
+
+  # Start the server first
+  uvicorn app.server.main:app --port 8000
+
+  # Run the TUI client
+  python -m app.main
+
+  Or configure a different endpoint:
+  AgentApp(base_url="http://other-host:3000", endpoint="/api/agent").run()
+
+  Sources:
+  - https://docs.ag-ui.com/concepts/messages
+  - https://www.copilotkit.ai/blog/master-the-17-ag-ui-event-types-for-building-agents-the-right-way
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>  
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle)
+
+
+
+
