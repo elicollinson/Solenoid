@@ -1,8 +1,42 @@
 import os
+import sys
 import time
+import tarfile
 import subprocess
 import requests
+from pathlib import Path
 from typing import Optional
+
+# Determine the bundled ollama directory
+_THIS_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _THIS_DIR.parent.parent.parent  # app/agent/ollama -> project root
+_BUNDLED_TAR = _PROJECT_ROOT / "ollama-darwin.tar"
+_BUNDLED_OLLAMA_DIR = _PROJECT_ROOT / ".ollama_bin"
+
+
+def _get_bundled_ollama_path() -> Optional[Path]:
+    """
+    Returns the path to the bundled ollama binary if available.
+    Extracts from tar if needed. Returns None if not on darwin or tar doesn't exist.
+    """
+    if sys.platform != "darwin":
+        return None
+
+    if not _BUNDLED_TAR.exists():
+        return None
+
+    ollama_bin = _BUNDLED_OLLAMA_DIR / "ollama"
+
+    # Extract if not already done
+    if not ollama_bin.exists():
+        _BUNDLED_OLLAMA_DIR.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(_BUNDLED_TAR, "r") as tar:
+            tar.extractall(_BUNDLED_OLLAMA_DIR)
+        # Ensure executable
+        ollama_bin.chmod(0o755)
+
+    return ollama_bin
+
 
 def _is_ollama_up(host: str = "127.0.0.1", port: int = 11434, timeout: float = 0.8) -> bool:
     url = f"http://{host}:{port}/api/tags"
@@ -26,17 +60,29 @@ def start_ollama_server(
     if _is_ollama_up(host, port):
         return None  # already running
 
-    # Verify CLI is available
-    from shutil import which
-    if which("ollama") is None:
-        raise RuntimeError("`ollama` CLI not found in PATH. Install from https://ollama.com/download and ensure it's on PATH.")
+    # Determine which ollama binary to use
+    ollama_bin = _get_bundled_ollama_path()
+    if ollama_bin is None:
+        # Fall back to system install
+        from shutil import which
+        system_ollama = which("ollama")
+        if system_ollama is None:
+            raise RuntimeError("`ollama` CLI not found in PATH and no bundled binary available. Install from https://ollama.com/download.")
+        ollama_bin = Path(system_ollama)
 
     env = os.environ.copy()
     env["OLLAMA_HOST"] = f"{host}:{port}"
     if models_dir:
         env["OLLAMA_MODELS"] = models_dir
 
-    # Cross-platform “detached-ish” start
+    # For bundled binary, set library path so it finds the bundled .dylib/.so files
+    if ollama_bin.parent == _BUNDLED_OLLAMA_DIR:
+        if sys.platform == "darwin":
+            env["DYLD_LIBRARY_PATH"] = str(_BUNDLED_OLLAMA_DIR)
+        else:
+            env["LD_LIBRARY_PATH"] = str(_BUNDLED_OLLAMA_DIR)
+
+    # Cross-platform "detached-ish" start
     stdout = open(log_file, "a", buffering=1) if log_file else subprocess.DEVNULL
     stderr = subprocess.STDOUT
 
@@ -46,11 +92,11 @@ def start_ollama_server(
         # Windows: detach so server isn't tied to the parent console
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
     else:
-        # POSIX: new session so it doesn’t get SIGINT with your app
+        # POSIX: new session so it doesn't get SIGINT with your app
         start_new_session = True
 
     proc = subprocess.Popen(
-        ["ollama", "serve"],
+        [str(ollama_bin), "serve"],
         env=env,
         stdout=stdout,
         stderr=stderr,
