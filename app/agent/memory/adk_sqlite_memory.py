@@ -1,0 +1,143 @@
+"""ADK memory service backed by SQLite, FTS5, and sqlite-vec."""
+
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+from typing import Callable, Iterable, Sequence
+
+try:  # ADK recently moved Session under google.adk.sessions.session
+    from google.adk.sessions import Session
+except ImportError:  # pragma: no cover - fallback for older package
+    from google.adk.sessions.session import Session  # type: ignore
+
+from google.adk.memory import BaseMemoryService
+from google.genai.types import Content, Part
+
+from .embeddings import NomicLocalEmbedder
+from .ingestion import connect_db, upsert_memory
+from .search import MemoryRow, search_memories
+
+LOGGER = logging.getLogger("memory.adk_sqlite_memory")
+
+MemoryExtractor = Callable[[Session, str], Iterable[dict]]
+
+
+class SqliteMemoryService(BaseMemoryService):
+    """Implements ADK's memory contract with local persistence."""
+
+    def __init__(
+        self,
+        db_path: str | Path,
+        *,
+        embedding_device: str | None = None,
+        dense_candidates: int = 80,
+        sparse_candidates: int = 80,
+        fuse_top_k: int = 30,
+        rerank_top_n: int = 12,
+        reranker_model: str | None = None,
+        max_events: int = 20,
+        extractor: MemoryExtractor | None = None,
+    ) -> None:
+        self.db_path = Path(db_path)
+        self.conn = connect_db(self.db_path)
+        self.embedder = NomicLocalEmbedder(device=embedding_device)
+        self.dense_candidates = dense_candidates
+        self.sparse_candidates = sparse_candidates
+        self.fuse_top_k = fuse_top_k
+        self.rerank_top_n = rerank_top_n
+        self.reranker_model = reranker_model or "BAAI/bge-reranker-v2-m3"
+        self.max_events = max_events
+        self.extractor = extractor
+
+    async def add_session_to_memory(self, session: Session) -> None:  # type: ignore[override]
+        events = getattr(session, "events", None) or []
+        tail_text = self._tail_text(events)
+        if not tail_text:
+            return
+
+        memories = list(self._extract_memories(session, tail_text))
+        if not memories:
+            return
+
+        for mem in memories:
+            try:
+                upsert_memory(
+                    self.conn,
+                    user_id=session.user_id,
+                    app_name=session.app_name,
+                    memory_type=mem.get("type", "semantic"),
+                    text=mem.get("text", ""),
+                    source=mem.get("source", f"session:{session.id}"),
+                    importance=int(mem.get("importance", 1)),
+                    tags=mem.get("tags"),
+                    expires_at=mem.get("ttl"),
+                    embedder=self.embedder,
+                )
+            except Exception:  # pragma: no cover - defensive logging
+                LOGGER.exception("Failed to persist extracted memory")
+
+    async def search_memory(  # type: ignore[override]
+        self,
+        query: str,
+        *,
+        user_id: str,
+        app_name: str,
+        top_n: int = 12,
+    ) -> Content:
+        hits = search_memories(
+            self.conn,
+            query,
+            user_id,
+            app_name,
+            top_n=min(top_n, self.rerank_top_n),
+            dense_limit=self.dense_candidates,
+            sparse_limit=self.sparse_candidates,
+            fuse_top_k=self.fuse_top_k,
+            reranker_model=self.reranker_model,
+            embedder=self.embedder,
+        )
+
+        parts = [self._row_to_part(text, score, row) for text, score, row in hits]
+        return Content(parts=parts)
+
+    def _tail_text(self, events: Sequence) -> str:
+        snippets: list[str] = []
+        if not events:
+            return ""
+        for event in events[-self.max_events :]:
+            content = getattr(event, "content", None)
+            if not content or not getattr(content, "parts", None):
+                continue
+            text_parts = []
+            for part in content.parts:
+                text = getattr(part, "text", None)
+                if text:
+                    text_parts.append(text)
+            if text_parts:
+                snippets.append("\n".join(text_parts))
+        return "\n".join(snippets)
+
+    def _extract_memories(self, session: Session, tail: str) -> Iterable[dict]:
+        if self.extractor:
+            try:
+                return self.extractor(session, tail) or []
+            except Exception:  # pragma: no cover - defensive logging
+                LOGGER.exception("Custom memory extractor crashed")
+        return []
+
+    @staticmethod
+    def _row_to_part(text: str, score: float, row: MemoryRow) -> Part:
+        payload = {
+            "text": text,
+            "score": float(score),
+            "type": row.memory_type,
+            "source": row.source,
+            "importance": row.importance,
+            "id": row.id,
+        }
+        return Part(text=json.dumps(payload, ensure_ascii=False))
+
+
+__all__ = ["SqliteMemoryService"]

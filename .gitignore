@@ -255,3 +255,10 @@ uv.lock
 htmlcov/
 **/settings.json
 local_general_agent/config/settings.json
+app/cpp_models/granite-4.0-h-tiny-Q4_0.gguf
+
+tests/eval/eval_results
+
+# App settings (contains local configuration)
+app_settings.yaml
+app_settings.yml
