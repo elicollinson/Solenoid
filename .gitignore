@@ -262,3 +262,4 @@ tests/eval/eval_results
 # App settings (contains local configuration)
 app_settings.yaml
 app_settings.yml
+entitlements.plist
