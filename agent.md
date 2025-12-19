@@ -22,7 +22,7 @@
 
 ## Runtime Flow
 1. Entry: `local_general_agent.main:main` ⟶ `run_app()` creates `TerminalApp`.
-2. On mount, the app (optionally) auto-starts the `local_responses` server using `uv run python -m local_responses ...` and opens/streams logs to `local_responses.log`.
+2. On mount, the app (optionally) auto-starts the `local_responses` server using `poetry run python -m local_responses ...` (override via `LOCAL_RESPONSES_RUNNER`) and opens/streams logs to `local_responses.log`.
 3. User input:
    - Slash commands drive theme toggles, clearing history, menus, and settings.
    - Free-form prompts stream through the primary agent, which can hand off to the settings agent or call the shell tool; streamed deltas render live in the UI.
@@ -30,4 +30,3 @@
 
 ### Key Environment Variables
 `LOCAL_RESPONSES_URL`, `LOCAL_RESPONSES_API_KEY`, `LOCAL_RESPONSES_AGENT_MODEL_ID`/`MODEL_ID`, `LOCAL_RESPONSES_AUTOSTART`, `LOCAL_RESPONSES_WORKSPACE_ROOT`, `LOCAL_RESPONSES_RUNNER`, `LOCAL_RESPONSES_MODEL`, `LOCAL_RESPONSES_MODEL_ID`, `LOCAL_RESPONSES_PORT`, `LOCAL_RESPONSES_EXTRA_ARGS`.
-

@@ -16,11 +16,11 @@ A multi-agent system powered by Google ADK with an AG-UI compatible API server a
 
 ## Installation
 
-This project uses `uv` for dependency management:
+This project uses `poetry` for dependency management:
 
 ```bash
-# Install dependencies
-uv sync
+# Install dependencies (creates the virtual environment)
+poetry install
 
 # Run the TUI client
 poetry run python -m app.main
