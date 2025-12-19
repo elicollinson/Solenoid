@@ -5,7 +5,8 @@ description = "A configurable terminal application with Solarized theming and sl
 readme = "README.md"
 authors = []
 packages = [
-    { include = "app" }
+    { include = "app" },
+    { include = "main_bundled.py" }
 ]
 
 [tool.poetry.dependencies]
@@ -21,14 +22,14 @@ wasmtime = "^39.0.0"
 ag-ui-adk = "^0.3.6"
 fastapi = "^0.115.0"
 uvicorn = {extras = ["standard"], version = ">=0.35.0"}
-
+httpx = ">=0.27.0"
 
 [tool.poetry.group.dev.dependencies]
-httpx = ">=0.27.0"
 pytest = ">=8.1.0"
 
 [tool.poetry.scripts]
 terminal-app = "app.main:main"
+local-agent = "main_bundled:main"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]

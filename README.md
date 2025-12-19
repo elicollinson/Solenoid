@@ -21,30 +21,30 @@ This project uses `poetry` for dependency management:
 ```bash
 # Install dependencies (creates the virtual environment)
 poetry install
-
-# Run the TUI client
-poetry run python -m app.main
-
-# Or run the API server
-poetry run uvicorn app.server.main:app --host 0.0.0.0 --port 8000
 ```
 
 ## Quick Start
 
-### 1. Start the Server
+### Bundled Mode (Recommended)
+
+Start both backend and frontend with a single command:
 
 ```bash
-# Start the AG-UI API server
-poetry run uvicorn app.server.main:app --port 8000
+poetry run local-agent
 ```
 
-### 2. Start the TUI Client
+This launches the FastAPI backend silently in the background and opens the Textual TUI in your terminal.
 
-In a separate terminal:
+### Separate Processes
+
+For development or debugging, run the server and client separately:
 
 ```bash
-# Start the terminal client
-poetry run python -m app.main
+# Terminal 1: Start the AG-UI API server
+poetry run uvicorn app.server.main:app --port 8000
+
+# Terminal 2: Start the terminal client
+poetry run terminal-app
 ```
 
 The client connects to `http://localhost:8000/api/agent` by default.
@@ -85,9 +85,10 @@ The client connects to `http://localhost:8000/api/agent` by default.
 ### Project Structure
 
 ```
+main_bundled.py                   # Bundled entry point (backend + frontend)
 app/
 ├── __init__.py
-├── main.py                       # TUI entry point
+├── main.py                       # TUI-only entry point
 ├── server/
 │   └── main.py                   # FastAPI AG-UI server
 ├── ui/
