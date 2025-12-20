@@ -22,36 +22,59 @@ def get_model(role: str = "default") -> LiteLlm:
     Ensures the model is available in Ollama (pulls if missing).
 
     Resolution order:
-    1. Check agent_models section for agent-specific config (e.g., "user_proxy_agent")
-    2. Check models section for role-based config (e.g., "agent", "extractor")
+    1. Check models.agents section for agent-specific config (e.g., "user_proxy_agent")
+    2. Check models.agent for generic agent config
     3. Fall back to models.default
     4. Fall back to hardcoded defaults
+
+    Each level inherits missing values from the next level in the chain.
     """
     # Ensure server is up
     start_ollama_server()
 
     config = load_settings()
-    agent_models_config = config.get("agent_models", {})
     models_config = config.get("models", {})
 
-    # First, check if this is an agent-specific config
-    role_config = agent_models_config.get(role)
+    # Get the fallback configs
+    default_config = models_config.get("default", {})
+    agent_config = models_config.get("agent", {})
+    agents_config = models_config.get("agents", {})
 
-    # If not found in agent_models, try the models section (for backward compatibility)
-    if not role_config:
-        role_config = models_config.get(role, models_config.get("default", {}))
+    # Build the effective config by merging in order: default -> agent -> agent-specific
+    # Start with hardcoded defaults
+    effective_config = {
+        "name": DEFAULT_MODEL,
+        "provider": DEFAULT_PROVIDER,
+        "context_length": None,
+    }
 
-    model_name = role_config.get("name", DEFAULT_MODEL)
-    provider = role_config.get("provider", DEFAULT_PROVIDER)
-    context_length = role_config.get("context_length")
+    # Apply default config
+    for key in ["name", "provider", "context_length"]:
+        if default_config.get(key) is not None:
+            effective_config[key] = default_config[key]
 
-    # If the role config is empty and role isn't 'default', fallback to default
-    if not role_config and role != "default":
-        default_config = models_config.get("default", {})
-        model_name = default_config.get("name", DEFAULT_MODEL)
-        provider = default_config.get("provider", DEFAULT_PROVIDER)
-        if context_length is None:
-            context_length = default_config.get("context_length")
+    # For agent-specific roles (ending with _agent), apply agent config then agent-specific
+    if role.endswith("_agent") or role in agents_config:
+        # Apply models.agent config
+        for key in ["name", "provider", "context_length"]:
+            if agent_config.get(key) is not None:
+                effective_config[key] = agent_config[key]
+
+        # Apply agent-specific config from models.agents.<role>
+        agent_specific = agents_config.get(role, {})
+        for key in ["name", "provider", "context_length"]:
+            if agent_specific.get(key) is not None:
+                effective_config[key] = agent_specific[key]
+    else:
+        # For non-agent roles (e.g., "extractor"), check models.<role> directly
+        role_config = models_config.get(role, {})
+        for key in ["name", "provider", "context_length"]:
+            if role_config.get(key) is not None:
+                effective_config[key] = role_config[key]
+
+    model_name = effective_config["name"]
+    provider = effective_config["provider"]
+    context_length = effective_config["context_length"]
 
     # Ensure model is available for Ollama models
     if "ollama" in provider:
