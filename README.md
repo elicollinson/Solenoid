@@ -1,5 +1,8 @@
-# Local General Agent
+<p align="center">
+  <img src="assets/solenoid_logo.svg" width="300" alt="Solenoid Logo">
+</p>
 
+# Solenoid
 A multi-agent system powered by Google ADK with an AG-UI compatible API server and Textual-based terminal client.
 
 ## Features
