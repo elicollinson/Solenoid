@@ -144,7 +144,7 @@ LOGGER.info(f"[MCP_AGENT] Creating agent with {len(_mcp_toolsets)} toolsets")
 
 mcp_agent = Agent(
     name="mcp_agent",
-    model=get_model("agent"),
+    model=get_model("mcp_agent"),
     instruction=MCP_AGENT_PROMPT,
     tools=_mcp_toolsets,
     disallow_transfer_to_peers=True,
