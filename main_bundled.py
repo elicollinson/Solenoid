@@ -901,76 +901,8 @@ def suppress_logging() -> None:
     logging.getLogger("LiteLLM").setLevel(logging.ERROR)
 
 
-class SilentUvicornServer:
-    """
-    Runs uvicorn server in a background thread with suppressed logging.
-    """
-
-    def __init__(self, app: str, host: str, port: int):
-        self.app = app
-        self.host = host
-        self.port = port
-        self.thread: Optional[threading.Thread] = None
-        self._should_exit = False
-
-    def start(self) -> None:
-        """Start the server in a background thread."""
-        self.thread = threading.Thread(target=self._run, daemon=True)
-        self.thread.start()
-
-    def _run(self) -> None:
-        """Run the uvicorn server (called in background thread)."""
-        import asyncio
-
-        # Ensure logging is suppressed in this thread too
-        suppress_logging()
-
-        # Create a new event loop for this thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
-            # Configure and run uvicorn
-            config = uvicorn.Config(
-                app=self.app,
-                host=self.host,
-                port=self.port,
-                log_level="error",  # Only show errors
-                access_log=False,   # Disable access logs
-                loop="asyncio",     # Use standard asyncio loop
-            )
-            server = uvicorn.Server(config)
-            loop.run_until_complete(server.serve())
-        finally:
-            loop.close()
-
-    def stop(self) -> None:
-        """Signal the server to stop (handled by daemon thread)."""
-        self._should_exit = True
-
-
-def wait_for_backend(timeout: float = HEALTH_CHECK_TIMEOUT) -> bool:
-    """
-    Wait for the backend to become healthy.
-
-    Args:
-        timeout: Maximum time to wait in seconds
-
-    Returns:
-        True if backend is ready, False if timeout
-    """
-    start_time = time.time()
-
-    while time.time() - start_time < timeout:
-        try:
-            response = httpx.get(HEALTH_CHECK_URL, timeout=1.0)
-            if response.status_code == 200:
-                return True
-        except (httpx.ConnectError, httpx.TimeoutException):
-            pass
-        time.sleep(HEALTH_CHECK_INTERVAL)
-
-    return False
+# Import the backend manager (uses the same configuration)
+from app.server.manager import create_backend_server, BackendServer
 
 
 def main() -> int:
@@ -991,8 +923,8 @@ def main() -> int:
     # Suppress backend logging for clean frontend experience
     suppress_logging()
 
-    # Start the backend server silently
-    server = SilentUvicornServer(
+    # Start the backend server using the manager (enables restart from TUI)
+    server = create_backend_server(
         app="app.server.main:app",
         host=BACKEND_HOST,
         port=BACKEND_PORT,
@@ -1000,7 +932,7 @@ def main() -> int:
     server.start()
 
     # Wait for backend to be ready
-    if not wait_for_backend():
+    if not server.wait_for_ready():
         print("Error: Backend failed to start within timeout", file=sys.stderr)
         return 1
 

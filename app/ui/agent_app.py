@@ -8,10 +8,11 @@ SSE streams and renders them using Textual widgets with real-time streaming.
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, LoadingIndicator, Static
 from textual.binding import Binding
-from textual import work
+from textual import work, on
 
 from app.ui.message_list import MessageList
 from app.ui.chat_input import ChatInput
+from app.ui.settings import SettingsScreen
 from app.ui.agui import (
     AGUIStreamClient,
     EventType,
@@ -124,6 +125,51 @@ class AgentApp(App):
         self._update_status("Connecting...", "normal")
         # Stream the agent response in a background worker
         self._stream_agent_response(msg.text)
+
+    def on_chat_input_command(self, msg: ChatInput.Command) -> None:
+        """Handle slash commands from the chat input."""
+        self._handle_command(msg.command, msg.args)
+
+    def _handle_command(self, command: str, args: str) -> None:
+        """
+        Process a slash command.
+
+        Args:
+            command: The command name (without leading /)
+            args: Any arguments after the command
+        """
+        feed = self.query_one(MessageList)
+
+        if command == "settings":
+            self._open_settings()
+        elif command == "help":
+            self._show_help()
+        elif command == "clear":
+            self.action_clear()
+        else:
+            feed.add_system_message(f"Unknown command: /{command}")
+            feed.add_system_message("Type /help for available commands")
+
+    def _open_settings(self) -> None:
+        """Open the settings screen."""
+        def on_settings_closed(modified: bool) -> None:
+            """Callback when settings screen is dismissed."""
+            feed = self.query_one(MessageList)
+            if modified:
+                feed.add_system_message("Settings updated. Some changes may require a restart.")
+            self._update_status("Ready", "normal")
+
+        self.push_screen(SettingsScreen(), on_settings_closed)
+        self._update_status("Editing settings...", "normal")
+
+    def _show_help(self) -> None:
+        """Show available commands."""
+        feed = self.query_one(MessageList)
+        help_text = """**Available Commands:**
+- `/settings` - Open the settings editor
+- `/clear` - Clear the chat history
+- `/help` - Show this help message"""
+        feed.add_system_message(help_text)
 
     @work(exclusive=True)
     async def _stream_agent_response(self, user_text: str) -> None:
