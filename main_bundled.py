@@ -40,14 +40,55 @@ HOME_SETTINGS_PATH = Path.home() / "app_settings.yaml"
 
 DEFAULT_SETTINGS = '''models:
   default:
-    name: "ministral-3:8b"
+    name: "ministral-3:8b-instruct-2512-q4_K_M"
     provider: "ollama_chat"
     context_length: 128000
   agent:
-    name: "ministral-3:8b"
+    name: "ministral-3:8b-instruct-2512-q4_K_M"
     context_length: 128000
   extractor:
-    name: "ministral-3:8b"
+    name: "ministral-3:8b-instruct-2512-q4_K_M"
+  # Agent-specific model overrides. If not configured, uses 'agent' model.
+  # If 'agent' not configured, uses 'default'.
+  agents:
+    user_proxy_agent:
+      name: "ministral-3:8b-instruct-2512-q4_K_M"
+      provider: "ollama_chat"
+      context_length: 128000
+    prime_agent:
+      name: "ministral-3:8b-instruct-2512-q4_K_M"
+      provider: "ollama_chat"
+      context_length: 128000
+    planning_agent:
+      name: "ministral-3:8b-instruct-2512-q4_K_M"
+      provider: "ollama_chat"
+      context_length: 128000
+    code_executor_agent:
+      name: "ministral-3:8b-instruct-2512-q4_K_M"
+      provider: "ollama_chat"
+      context_length: 128000
+    chart_generator_agent:
+      name: "ministral-3:8b-instruct-2512-q4_K_M"
+      provider: "ollama_chat"
+      context_length: 128000
+    research_agent:
+      name: "ministral-3:8b-instruct-2512-q4_K_M"
+      provider: "ollama_chat"
+      context_length: 128000
+    mcp_agent:
+      name: "ministral-3:8b-instruct-2512-q4_K_M"
+      provider: "ollama_chat"
+      context_length: 128000
+    generic_executor_agent:
+      name: "ministral-3:8b-instruct-2512-q4_K_M"
+      provider: "ollama_chat"
+      context_length: 128000
+
+search:
+  provider: "brave"
+  brave_search_api_key: ""
+
+mcp_servers: {}
 
 agent_prompts:
   user_proxy_agent: |
