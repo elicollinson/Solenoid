@@ -12,7 +12,7 @@ GENERIC_EXECUTOR_PROMPT = get_agent_prompt("generic_executor_agent")
 # Define the Agent
 agent = Agent(
     name="generic_executor_agent",
-    model=get_model("agent"),
+    model=get_model("generic_executor_agent"),
     instruction=GENERIC_EXECUTOR_PROMPT,
     disallow_transfer_to_peers=True,
     disallow_transfer_to_parent=True  # Agent must complete task, not transfer back

@@ -15,7 +15,7 @@ RESEARCH_AGENT_PROMPT = get_agent_prompt("research_agent")
 
 agent = Agent(
     name="research_agent",
-    model=get_model("agent"),
+    model=get_model("research_agent"),
     instruction=RESEARCH_AGENT_PROMPT,
     tools=[search_tool, read_webpage_tool],
     disallow_transfer_to_peers=True,

@@ -42,7 +42,7 @@ def get_dynamic_instruction(context, *args, **kwargs):
 
 agent = Agent(
     name="user_proxy_agent",
-    model=get_model("agent"),
+    model=get_model("user_proxy_agent"),
     instruction=get_dynamic_instruction,
     before_model_callback=[capture_user_query],
     sub_agents=[prime_agent]

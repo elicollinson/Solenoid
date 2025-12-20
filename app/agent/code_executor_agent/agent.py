@@ -23,7 +23,7 @@ CODE_EXECUTOR_PROMPT = get_agent_prompt("code_executor_agent")
 # Define the Agent
 agent = Agent(
     name="code_executor_agent",
-    model=get_model("agent"),
+    model=get_model("code_executor_agent"),
     instruction=CODE_EXECUTOR_PROMPT,
     code_executor=secure_executor,
     disallow_transfer_to_peers=True,

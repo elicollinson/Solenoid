@@ -43,8 +43,8 @@ def get_dynamic_instruction(*args, **kwargs):
 # Define the Agent
 agent = Agent(
     name="planning_agent",
-    model=get_model("agent"), # Using the 'agent' model config, typically a smarter model
-    instruction=get_dynamic_instruction, # Use the dynamic instruction function
+    model=get_model("planning_agent"),
+    instruction=get_dynamic_instruction,
     sub_agents=[code_executor_agent, chart_generator_agent, research_agent, generic_executor_agent, mcp_agent]
 )
 

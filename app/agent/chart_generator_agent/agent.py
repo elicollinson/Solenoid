@@ -23,7 +23,7 @@ CHART_GENERATOR_PROMPT = get_agent_prompt("chart_generator_agent")
 # Define the Agent
 agent = Agent(
     name="chart_generator_agent",
-    model=get_model("agent"),
+    model=get_model("chart_generator_agent"),
     instruction=CHART_GENERATOR_PROMPT,
     code_executor=secure_executor,
     disallow_transfer_to_peers=True,

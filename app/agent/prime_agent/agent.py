@@ -110,7 +110,7 @@ PRIME_AGENT_PROMPT = get_agent_prompt("prime_agent")
 
 agent = Agent(
     name="prime_agent",
-    model=get_model("agent"),
+    model=get_model("prime_agent"),
     instruction=PRIME_AGENT_PROMPT,
     before_model_callback=[],
     # after_model_callback=[save_memories],
