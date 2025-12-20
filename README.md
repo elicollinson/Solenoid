@@ -16,6 +16,8 @@ A multi-agent system powered by Google ADK with an AG-UI compatible API server a
 - **Local Memory System**: SQLite + FTS5 + sqlite-vec for hybrid semantic/keyword search with BGE reranking
 - **Configurable Models**: Support for Ollama models via LiteLLM with automatic model pulling
 - **Customizable Prompts**: All agent prompts configurable via YAML
+- **In-App Settings Editor**: Edit configuration via `/settings` command with YAML validation
+- **Slash Commands**: Extensible command system for quick actions (`/settings`, `/help`, `/clear`)
 
 ## Installation
 
@@ -93,14 +95,20 @@ app/
 ├── __init__.py
 ├── main.py                       # TUI-only entry point
 ├── server/
-│   └── main.py                   # FastAPI AG-UI server
+│   ├── main.py                   # FastAPI AG-UI server
+│   └── manager.py                # Backend server lifecycle manager
 ├── ui/
 │   ├── agent_app.py              # Textual TUI application
 │   ├── agui/                     # AG-UI protocol client
 │   │   ├── client.py             # SSE stream client
 │   │   └── types.py              # Event type definitions
-│   ├── chat_input/               # Input widget
-│   └── message_list/             # Message display widget
+│   ├── chat_input/               # Input widget (with slash command support)
+│   ├── message_list/             # Message display widget
+│   └── settings/                 # Settings editor UI
+│       └── screen.py             # Modal settings screen
+├── settings/                     # Settings management module
+│   ├── validator.py              # Extensible YAML validation
+│   └── manager.py                # Settings load/save operations
 ├── agent/
 │   ├── config.py                 # Settings loader
 │   ├── prime_agent/
@@ -250,6 +258,120 @@ agent_prompts:
 
 This allows you to customize agent behavior without modifying code.
 
+## Settings Management
+
+The application includes an in-app settings editor accessible via the `/settings` command. This provides a safe way to modify configuration without directly editing YAML files.
+
+### Using the Settings Editor
+
+1. Type `/settings` in the chat input
+2. A modal screen appears with available configuration sections
+3. Use arrow keys to navigate between sections
+4. Press `Enter` to edit a section
+5. Modify the YAML in the text editor
+6. Press `Ctrl+S` or click `Save` to validate and save changes
+7. Press `Escape` or click `Back` to return to section list
+8. Press `Escape` again or click `Close` to exit settings
+
+**Editor Keyboard Shortcuts:**
+| Key | Action |
+|-----|--------|
+| `Ctrl+S` | Save current section |
+| `Escape` | Go back / Close |
+| `Enter` | Select section to edit |
+
+### Available Sections
+
+| Section | Description |
+|---------|-------------|
+| `models` | Model configuration (defaults and per-agent overrides in `models.agents`) |
+| `search` | Web search provider and API keys |
+| `mcp_servers` | MCP server connections (stdio and HTTP) |
+| `agent_prompts` | System prompts for each agent |
+
+### Validation
+
+Changes are validated before saving. The validator checks:
+
+- **YAML Syntax**: Ensures valid YAML formatting
+- **Structure**: Validates types match expected schema
+- **Section-specific rules**: Custom validation per section type
+
+If validation fails, an error message is displayed and the editor remains open for corrections.
+
+### Backend Restart
+
+After successfully saving settings, the application prompts you to restart the backend server. This ensures your changes take effect immediately.
+
+**Restart Dialog Options:**
+- **Restart Now**: Stops the backend, clears caches, and starts a fresh server instance
+- **Later**: Saves settings but leaves the current backend running (manual restart required)
+
+**What happens during restart:**
+1. The current uvicorn server is gracefully stopped
+2. Settings caches are cleared
+3. A new server instance starts with updated configuration
+4. The application waits for the health check to pass
+5. Status updates are shown throughout the process
+
+**Note:** If running the frontend and backend separately (not in bundled mode), the restart prompt will indicate that manual restart is required.
+
+### Adding Custom Validators
+
+The settings system is extensible. To add validation for a new section or customize existing validation:
+
+```python
+from app.settings.validator import SettingsValidator, ValidationResult, ValidationError
+
+def validate_my_section(value: any, reference: any) -> ValidationResult:
+    """Custom validator for 'my_section' settings."""
+    errors = []
+
+    if not isinstance(value, dict):
+        errors.append(ValidationError("", "Must be a mapping"))
+        return ValidationResult(is_valid=False, errors=errors)
+
+    # Add your validation logic
+    if 'required_field' not in value:
+        errors.append(ValidationError("required_field", "This field is required"))
+
+    return ValidationResult(
+        is_valid=len(errors) == 0,
+        errors=errors,
+        parsed_value=value
+    )
+
+# Register the validator
+SettingsValidator.register_validator('my_section', validate_my_section)
+```
+
+### Adding New Slash Commands
+
+To add a new slash command to the TUI:
+
+1. Edit `app/ui/agent_app.py`
+2. Add a case to the `_handle_command` method:
+
+```python
+def _handle_command(self, command: str, args: str) -> None:
+    feed = self.query_one(MessageList)
+
+    if command == "settings":
+        self._open_settings()
+    elif command == "mycommand":
+        self._handle_my_command(args)
+    # ... other commands
+    else:
+        feed.add_system_message(f"Unknown command: /{command}")
+
+def _handle_my_command(self, args: str) -> None:
+    """Handle the /mycommand slash command."""
+    # Your command logic here
+    pass
+```
+
+3. Update the help text in `_show_help()` to document your command
+
 ## Usage
 
 ### TUI Keyboard Shortcuts
@@ -257,8 +379,20 @@ This allows you to customize agent behavior without modifying code.
 | Key | Action |
 |-----|--------|
 | `Enter` | Send message |
+| `Ctrl+J` / `Shift+Enter` | Insert newline |
 | `Ctrl+C` | Quit application |
 | `Ctrl+L` | Clear message feed |
+| `Escape` | Close settings / Go back |
+
+### Slash Commands
+
+The TUI supports slash commands for quick actions:
+
+| Command | Description |
+|---------|-------------|
+| `/settings` | Open the settings editor |
+| `/clear` | Clear the chat history |
+| `/help` | Show available commands |
 
 ### API Endpoints
 
