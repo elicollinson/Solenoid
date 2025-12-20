@@ -1,6 +1,7 @@
 import json
 from textual.containers import VerticalScroll
 from textual.widgets import Markdown, Static
+from rich.markdown import Markdown as RichMarkdown
 
 
 # Tool name display mappings for friendlier names
@@ -179,8 +180,12 @@ class ToolCallWidget(Static):
         self._update_display()
 
 
-class StreamingMarkdown(Markdown):
-    """A Markdown widget that supports streaming content updates."""
+class StreamingMarkdown(Static):
+    """A widget that streams as plain text, then renders as Markdown when complete.
+
+    During streaming, content is displayed as plain text for performance.
+    When streaming ends, the full content is rendered as formatted markdown.
+    """
 
     DEFAULT_CSS = """
     StreamingMarkdown {
@@ -193,18 +198,30 @@ class StreamingMarkdown(Markdown):
     }
     """
 
-    def __init__(self, content: str = "", **kwargs) -> None:
-        super().__init__(content, **kwargs)
+    def __init__(self, content: str = "", *, streaming: bool = False, **kwargs) -> None:
+        # If not streaming, render as markdown immediately; otherwise plain text
+        if streaming:
+            super().__init__(content, **kwargs)
+        else:
+            super().__init__(RichMarkdown(content) if content else "", **kwargs)
         self._content = content
+        self._is_streaming = streaming
 
     def append_content(self, delta: str) -> None:
-        """Append text to the markdown content."""
+        """Append text to the content (plain text during streaming)."""
         self._content += delta
+        # Fast plain text update during streaming - no markdown parsing
         self.update(self._content)
 
     def set_streaming(self, is_streaming: bool) -> None:
-        """Set the streaming state (affects visual style)."""
+        """Set the streaming state. When streaming ends, render as markdown."""
+        was_streaming = self._is_streaming
+        self._is_streaming = is_streaming
         self.set_class(is_streaming, "-streaming")
+
+        # When streaming ends, render the final content as markdown
+        if was_streaming and not is_streaming:
+            self.update(RichMarkdown(self._content))
 
     @property
     def content(self) -> str:
@@ -260,8 +277,8 @@ class MessageList(VerticalScroll):
             The created StreamingMarkdown widget
         """
         prefix = f"**{role.title()}**\n\n"
-        widget = StreamingMarkdown(prefix)
-        widget.set_streaming(True)
+        widget = StreamingMarkdown(prefix, streaming=True)
+        widget.add_class("-streaming")
         self._message_widgets[message_id] = widget
         self._active_message = widget
         self.mount(widget)
