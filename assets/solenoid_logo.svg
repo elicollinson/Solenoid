@@ -16,8 +16,8 @@
   </g>
 
   <g id="typography" text-anchor="middle" font-family="Helvetica, Arial, sans-serif">
-    <text x="256" y="420" font-size="52" font-weight="bold" letter-spacing="4" fill="currentColor">SOLENOID</text>
+    <text x="256" y="420" font-size="52" font-weight="bold" letter-spacing="4" fill="#A0A0A0">SOLENOID</text>
     
-    <text x="256" y="460" font-size="16" font-weight="normal" letter-spacing="3" fill="currentColor">LOCAL AGENT ARRAY</text>
+    <text x="256" y="460" font-size="16" font-weight="normal" letter-spacing="3" fill="#A0A0A0">LOCAL AGENT ARRAY</text>
   </g>
 </svg>
