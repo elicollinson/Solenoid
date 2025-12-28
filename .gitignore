@@ -264,3 +264,4 @@ app_settings.yaml
 app_settings.yml
 entitlements.plist
 submission.md
+**/resources/models/**

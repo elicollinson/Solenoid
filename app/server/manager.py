@@ -10,28 +10,26 @@ import asyncio
 import logging
 import threading
 import time
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
+from resources.backend_config import BACKEND_HOST, BACKEND_PORT, HEALTH_CHECK_INTERVAL, HEALTH_CHECK_TIMEOUT, HEALTH_CHECK_URL
 
 import httpx
 import uvicorn
 
 LOGGER = logging.getLogger(__name__)
 
-# Configuration
-BACKEND_HOST = "127.0.0.1"
-BACKEND_PORT = 8000
-HEALTH_CHECK_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}/health"
-HEALTH_CHECK_TIMEOUT = 30  # seconds
-HEALTH_CHECK_INTERVAL = 0.2  # seconds
-
-
 class BackendServer:
     """
     Manages a uvicorn server in a background thread with restart capability.
+
+    IMPORTANT - PyInstaller Compatibility:
+    The `app` parameter MUST be the actual ASGI application object, NOT a string
+    like "app.server.main:app". Uvicorn uses importlib.import_module() internally
+    to resolve string references, which fails in frozen PyInstaller executables.
     """
 
-    def __init__(self, app: str, host: str, port: int):
-        self.app = app
+    def __init__(self, app: Any, host: str, port: int):
+        self.app = app  # Must be actual ASGI app object, not a string path
         self.host = host
         self.port = port
         self.thread: Optional[threading.Thread] = None
@@ -211,7 +209,7 @@ def set_backend_server(server: BackendServer) -> None:
 
 
 def create_backend_server(
-    app: str = "app.server.main:app",
+    app: Any,
     host: str = BACKEND_HOST,
     port: int = BACKEND_PORT
 ) -> BackendServer:
@@ -219,7 +217,7 @@ def create_backend_server(
     Create and register a new backend server.
 
     Args:
-        app: The ASGI app to run
+        app: The ASGI app object (must be actual object, not a string path)
         host: Host to bind to
         port: Port to bind to
 
