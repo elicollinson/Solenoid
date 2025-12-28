@@ -1,7 +1,6 @@
 import json
-from textual.containers import VerticalScroll
+from textual.containers import Container, VerticalScroll
 from textual.widgets import Markdown, Static
-from rich.markdown import Markdown as RichMarkdown
 
 
 # Tool name display mappings for friendlier names
@@ -180,11 +179,12 @@ class ToolCallWidget(Static):
         self._update_display()
 
 
-class StreamingMarkdown(Static):
+class StreamingMarkdown(Container):
     """A widget that streams as plain text, then renders as Markdown when complete.
 
     During streaming, content is displayed as plain text for performance.
-    When streaming ends, the full content is rendered as formatted markdown.
+    When streaming ends, the full content is rendered as formatted markdown
+    with clickable links.
     """
 
     DEFAULT_CSS = """
@@ -192,26 +192,42 @@ class StreamingMarkdown(Static):
         border: round $panel;
         padding: 1;
         margin-bottom: 1;
+        height: auto;
     }
     StreamingMarkdown.-streaming {
         border: round $accent;
     }
+    StreamingMarkdown > Static {
+        height: auto;
+    }
+    StreamingMarkdown > Markdown {
+        height: auto;
+    }
     """
 
     def __init__(self, content: str = "", *, streaming: bool = False, **kwargs) -> None:
-        # If not streaming, render as markdown immediately; otherwise plain text
-        if streaming:
-            super().__init__(content, **kwargs)
-        else:
-            super().__init__(RichMarkdown(content) if content else "", **kwargs)
+        super().__init__(**kwargs)
         self._content = content
         self._is_streaming = streaming
+
+    def compose(self):
+        """Compose the initial child widget based on streaming state."""
+        if self._is_streaming:
+            # During streaming, use Static for fast plain text updates
+            yield Static(self._content)
+        else:
+            # Not streaming, render as Markdown with clickable links
+            yield Markdown(self._content, open_links=True)
 
     def append_content(self, delta: str) -> None:
         """Append text to the content (plain text during streaming)."""
         self._content += delta
         # Fast plain text update during streaming - no markdown parsing
-        self.update(self._content)
+        try:
+            static = self.query_one(Static)
+            static.update(self._content)
+        except Exception:
+            pass
 
     def set_streaming(self, is_streaming: bool) -> None:
         """Set the streaming state. When streaming ends, render as markdown."""
@@ -219,9 +235,13 @@ class StreamingMarkdown(Static):
         self._is_streaming = is_streaming
         self.set_class(is_streaming, "-streaming")
 
-        # When streaming ends, render the final content as markdown
+        # When streaming ends, replace Static with Markdown widget
         if was_streaming and not is_streaming:
-            self.update(RichMarkdown(self._content))
+            # Remove all current children
+            for child in list(self.children):
+                child.remove()
+            # Mount the Markdown widget with clickable links
+            self.mount(Markdown(self._content, open_links=True))
 
     @property
     def content(self) -> str:

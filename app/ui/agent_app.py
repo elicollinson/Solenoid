@@ -64,8 +64,8 @@ class AgentApp(App):
     in real-time with support for text messages and tool calls.
     """
 
-    TITLE = "AG-UI Agent"
-    SUB_TITLE = "Terminal Client"
+    TITLE = "Solenoid"
+    SUB_TITLE = ""
 
     CSS = """
     Screen { layout: vertical; }
