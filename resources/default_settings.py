@@ -1,4 +1,9 @@
-DEFAULT_SETTINGS = '''models:
+DEFAULT_SETTINGS = '''embeddings:
+  provider: ollama
+  host: http://localhost:11434
+  model: nomic-embed-text
+
+models:
   default:
     name: "ministral-3:8b-instruct-2512-q4_K_M"
     provider: "ollama_chat"

@@ -15,7 +15,7 @@ except ImportError:  # pragma: no cover - fallback for older package
 from google.adk.memory import BaseMemoryService
 from google.genai.types import Content, Part
 
-from .embeddings import NomicLocalEmbedder
+from .ollama_embeddings import OllamaEmbedder
 from .ingestion import connect_db, upsert_memory
 from .search import MemoryRow, search_memories
 
@@ -42,7 +42,8 @@ class SqliteMemoryService(BaseMemoryService):
         self,
         db_path: str | Path,
         *,
-        embedding_device: str | None = None,
+        ollama_host: str = "http://localhost:11434",
+        embedding_model: str = "nomic-embed-text",
         dense_candidates: int = 80,
         sparse_candidates: int = 80,
         fuse_top_k: int = 30,
@@ -53,7 +54,7 @@ class SqliteMemoryService(BaseMemoryService):
     ) -> None:
         self.db_path = Path(db_path)
         self.conn = connect_db(self.db_path)
-        self.embedder = NomicLocalEmbedder(device=embedding_device)
+        self.embedder = OllamaEmbedder(host=ollama_host, model=embedding_model)
         self.dense_candidates = dense_candidates
         self.sparse_candidates = sparse_candidates
         self.fuse_top_k = fuse_top_k

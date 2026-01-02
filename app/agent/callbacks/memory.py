@@ -25,6 +25,7 @@ from pathlib import Path
 from google.adk.agents.callback_context import CallbackContext
 from google.genai import types
 
+from app.agent.config import get_embedding_config
 from app.agent.memory.adk_sqlite_memory import SqliteMemoryService
 from app.agent.memory.search import search_memories
 from app.agent.memory.extractor import llm_extractor
@@ -55,8 +56,14 @@ def get_memory_service() -> SqliteMemoryService:
     """Get or create the singleton memory service instance."""
     global _memory_service
     if _memory_service is None:
+        # Load embedding config from settings
+        embed_config = get_embedding_config()
+        LOGGER.info(f"[Memory] Initializing memory service with embedding config: {embed_config}")
+
         _memory_service = SqliteMemoryService(
             db_path="memories.db",
+            ollama_host=embed_config["host"],
+            embedding_model=embed_config["model"],
             extractor=llm_extractor
         )
     return _memory_service
