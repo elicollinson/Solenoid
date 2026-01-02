@@ -426,15 +426,32 @@ app.run()
 
 ## Local Memory System
 
-The application includes a hybrid memory system for persistent context:
+The agent automatically remembers context across conversations using a local memory system.
 
-- **Storage**: SQLite database (`memories.db`)
-- **Full-Text Search**: FTS5 for keyword matching
-- **Vector Search**: sqlite-vec for semantic similarity
-- **Embeddings**: Nomic Embed Text v1.5 (local, 256D Matryoshka)
-- **Reranking**: BGE Reranker v2 m3 for result quality
+### How It Works
 
-Memory is automatically managed per session and persisted across restarts.
+1. **Injection**: When a user sends a message, relevant memories are retrieved and injected into the prompt
+2. **Extraction**: When a final response is generated, an LLM extracts key facts, preferences, and events
+3. **Storage**: Memories are embedded via Ollama (`nomic-embed-text`) and stored in SQLite with vector search
+
+### Storage Stack
+
+| Component | Purpose |
+|-----------|---------|
+| SQLite + FTS5 | Keyword search |
+| sqlite-vec | Vector similarity search (256-dim embeddings) |
+| BGE Reranker | Cross-encoder reranking for relevance |
+
+### Configuration
+
+```yaml
+embeddings:
+  provider: ollama
+  host: http://localhost:11434
+  model: nomic-embed-text
+```
+
+The embedding model is pulled automatically on first run. Memories persist in `memories.db` across restarts.
 
 ## Code Execution Environment
 
@@ -475,8 +492,8 @@ This executes test cases from `tests/eval/agent_test_cases.csv` and generates re
 - `textual` - Terminal UI framework
 - `fastapi` + `uvicorn` - API server
 - `litellm` - LLM provider abstraction
-- `sentence-transformers` - Local embeddings
 - `sqlite-vec` - Vector search extension
+- `sentence-transformers` - BGE reranker
 - `wasmtime` - WASM runtime
 
 ### Running Tests
@@ -527,6 +544,7 @@ agent = Agent(
 - Built with [Google ADK](https://github.com/google/adk-python)
 - AG-UI Protocol from [AG-UI](https://docs.ag-ui.com)
 - Terminal UI with [Textual](https://github.com/textualize/textual)
+- Local inference with [Ollama](https://ollama.com/)
 - Vector search with [sqlite-vec](https://github.com/asg017/sqlite-vec)
 - Embeddings from [Nomic AI](https://www.nomic.ai/)
 
