@@ -19,7 +19,18 @@ from .embeddings import NomicLocalEmbedder
 from .ingestion import connect_db, upsert_memory
 from .search import MemoryRow, search_memories
 
+# Use file-based logging to avoid Textual UI interference
+_MEMORY_LOG_FILE = Path("memory_debug.log")
+_file_handler = logging.FileHandler(_MEMORY_LOG_FILE, mode='a')
+_file_handler.setLevel(logging.DEBUG)
+_file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+))
+
 LOGGER = logging.getLogger("memory.adk_sqlite_memory")
+LOGGER.setLevel(logging.DEBUG)
+LOGGER.addHandler(_file_handler)
+LOGGER.propagate = False
 
 MemoryExtractor = Callable[[Session, str], Iterable[dict]]
 
@@ -52,18 +63,40 @@ class SqliteMemoryService(BaseMemoryService):
         self.extractor = extractor
 
     async def add_session_to_memory(self, session: Session) -> None:  # type: ignore[override]
+        LOGGER.info(f"[MemoryService] add_session_to_memory called")
+        LOGGER.info(f"[MemoryService] Session ID: {session.id}, User: {session.user_id}, App: {session.app_name}")
+
         events = getattr(session, "events", None) or []
+        LOGGER.info(f"[MemoryService] Session has {len(events)} events")
+
+        # Debug: Log event details
+        for i, event in enumerate(events[-5:] if len(events) > 5 else events):  # Log last 5 events
+            content = getattr(event, "content", None)
+            parts_count = len(content.parts) if content and hasattr(content, 'parts') else 0
+            LOGGER.debug(f"[MemoryService]   Event {i}: {type(event).__name__}, parts: {parts_count}")
+
         tail_text = self._tail_text(events)
+        LOGGER.info(f"[MemoryService] Extracted tail_text length: {len(tail_text)} chars")
+        if tail_text:
+            preview = tail_text[:200] + "..." if len(tail_text) > 200 else tail_text
+            LOGGER.debug(f"[MemoryService] tail_text preview: {preview}")
+
         if not tail_text:
+            LOGGER.warning("[MemoryService] tail_text is EMPTY - skipping memory extraction")
             return
 
+        LOGGER.info("[MemoryService] Calling extractor...")
         memories = list(self._extract_memories(session, tail_text))
+        LOGGER.info(f"[MemoryService] Extractor returned {len(memories)} memories")
+
         if not memories:
+            LOGGER.warning("[MemoryService] No memories extracted - nothing to persist")
             return
 
-        for mem in memories:
+        for i, mem in enumerate(memories):
+            LOGGER.info(f"[MemoryService] Persisting memory {i+1}: {mem.get('text', '')[:50]}...")
             try:
-                upsert_memory(
+                mem_id = upsert_memory(
                     self.conn,
                     user_id=session.user_id,
                     app_name=session.app_name,
@@ -75,8 +108,9 @@ class SqliteMemoryService(BaseMemoryService):
                     expires_at=mem.get("ttl"),
                     embedder=self.embedder,
                 )
-            except Exception:  # pragma: no cover - defensive logging
-                LOGGER.exception("Failed to persist extracted memory")
+                LOGGER.info(f"[MemoryService] Successfully persisted memory with ID: {mem_id}")
+            except Exception as e:  # pragma: no cover - defensive logging
+                LOGGER.exception(f"Failed to persist extracted memory: {e}")
 
     async def search_memory(  # type: ignore[override]
         self,

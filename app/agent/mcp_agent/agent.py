@@ -142,6 +142,8 @@ LOGGER.info(f"[MCP_AGENT] Creating agent with {len(_mcp_toolsets)} toolsets")
 # Note: The MCP toolsets are resolved at runtime when the agent runs.
 # The before_model_callback will log what tools are available.
 
+from app.agent.callbacks.memory import save_memories_on_final_response
+
 mcp_agent = Agent(
     name="mcp_agent",
     model=get_model("mcp_agent"),
@@ -149,5 +151,7 @@ mcp_agent = Agent(
     tools=_mcp_toolsets,
     disallow_transfer_to_peers=True,
     disallow_transfer_to_parent=True,  # Agent must complete task, not transfer back
-    before_model_callback=log_tools_before_model
+    before_model_callback=log_tools_before_model,
+    # Memory storage on final response detection
+    after_model_callback=[save_memories_on_final_response]
 )
