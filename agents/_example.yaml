@@ -1,0 +1,71 @@
+# Example Custom Agent Template
+# ==============================
+#
+# This file demonstrates the structure of a custom agent definition.
+# Files starting with underscore (_) are ignored by the loader.
+#
+# To create a new agent:
+# 1. Copy this file to agents/my_agent_name.yaml
+# 2. Edit the configuration below
+# 3. Run /reload-agents in the chat
+#
+# The agent will be available for the planning_agent to delegate to.
+
+name: example_research_agent
+description: "An example agent that demonstrates custom agent configuration"
+instruction: |
+  You are a specialized research assistant focused on a specific domain.
+
+  Your responsibilities:
+  1. Answer questions within your area of expertise
+  2. Search for relevant information when needed
+  3. Provide accurate, well-sourced responses
+
+  Guidelines:
+  - Be concise and factual
+  - Cite sources when possible
+  - Acknowledge when something is outside your expertise
+
+  Your knowledge base contains domain-specific information that you should
+  reference when answering questions.
+
+# Optional: Override the default model
+# If not specified, uses the 'agent' model from app_settings.yaml
+model:
+  name: ministral-3:8b-instruct-2512-q4_K_M
+  provider: ollama_chat
+
+# Tools this agent can use (explicit selection)
+# Available tools:
+#   - universal_search: Web search via Brave API
+#   - read_webpage: Fetch and parse web pages
+#   - (code execution tools are available but typically not needed for research agents)
+tools:
+  - universal_search
+  - read_webpage
+
+# MCP servers this agent can access
+# Must be configured in app_settings.yaml under mcp_servers
+# Leave empty for no MCP access
+mcp_servers: []
+  # - filesystem
+  # - context7
+
+# Knowledge base configuration
+# Each agent gets its own isolated KB for RAG retrieval
+knowledge_base:
+  enabled: true
+  search_top_k: 10        # Number of chunks to retrieve
+  search_threshold: 0.7   # Minimum similarity score (0.0-1.0)
+
+# Metadata (for organization, not used at runtime)
+metadata:
+  author: template
+  version: 1
+  tags:
+    - example
+    - template
+    - research
+
+# Set to false to disable without deleting the file
+enabled: false  # This example is disabled by default

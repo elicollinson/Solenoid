@@ -1,57 +1,92 @@
 # planning_agent/agent.py
 """
 Planning Agent - The coordinator that delegates to specialist agents.
+
+This agent coordinates work between built-in specialist agents and
+dynamically loaded custom agents from the agents/ directory.
 """
 import logging
+from typing import Optional
 from google.adk.agents import Agent
 from app.agent.models.factory import get_model
-from app.agent.config import get_agent_prompt
 from app.agent.callbacks.memory import save_memories_on_final_response
 from app.agent.code_executor_agent.agent import code_executor_agent
 from app.agent.chart_generator_agent.agent import chart_generator_agent
 from app.agent.research_agent.agent import research_agent
 from app.agent.planning_agent.generic_executor import generic_executor_agent
 from app.agent.mcp_agent.agent import mcp_agent
+from app.agent.planning_agent.dynamic_instruction import create_dynamic_instruction_callback
 
 LOGGER = logging.getLogger(__name__)
 
-# Load prompt template from settings
-PLANNER_PROMPT = get_agent_prompt("planning_agent")
+# Built-in specialist agents (always available)
+BUILTIN_SUB_AGENTS = [
+    code_executor_agent,
+    chart_generator_agent,
+    research_agent,
+    generic_executor_agent,
+    mcp_agent,
+]
 
-def get_dynamic_instruction(*args, **kwargs):
-    LOGGER.info(f"get_dynamic_instruction called with args={args} kwargs={kwargs}")
-    
-    # Handle different call signatures
-    context = None
-    if len(args) > 0:
-        context = args[0]
-    
-    # If context is not what we expect, try to find session in kwargs or args
-    session = None
-    if hasattr(context, 'session'):
-        session = context.session
-    elif len(args) > 1:
-        # Old signature: agent, session
-        session = args[1]
-    
-    if not session:
-        LOGGER.warning("Could not find session in get_dynamic_instruction arguments")
-        return PLANNER_PROMPT.format(plan_state="[]")
+# Custom agents loaded dynamically (set during initialization)
+_custom_agents: list[Agent] = []
 
-    # Fetch the plan from session state (defaults to "No plan yet")
-    current_plan = session.state.get("plan", "[]")
-    
-    # Format the prompt with the current plan
-    return PLANNER_PROMPT.format(plan_state=current_plan)
+
+def set_custom_agents(agents: list[Agent]) -> None:
+    """
+    Set the custom agents for the planning agent.
+
+    This is called during server initialization after custom agents are loaded.
+    """
+    global _custom_agents
+    _custom_agents = agents
+    LOGGER.info(f"Planning agent configured with {len(agents)} custom agents")
+
+    # Update the agent's sub_agents list
+    if planning_agent:
+        planning_agent._sub_agents = BUILTIN_SUB_AGENTS + _custom_agents
+        LOGGER.info(
+            f"Planning agent sub_agents updated: "
+            f"{len(BUILTIN_SUB_AGENTS)} built-in + {len(_custom_agents)} custom"
+        )
+
+
+def get_all_sub_agents() -> list[Agent]:
+    """Get all sub-agents (built-in + custom)."""
+    return BUILTIN_SUB_AGENTS + _custom_agents
+
+
+def reload_custom_agents(agents: list[Agent]) -> None:
+    """
+    Reload custom agents without restarting the server.
+
+    This is called by the /reload-agents command handler.
+    """
+    global _custom_agents
+    old_count = len(_custom_agents)
+    _custom_agents = agents
+
+    if planning_agent:
+        planning_agent._sub_agents = BUILTIN_SUB_AGENTS + _custom_agents
+
+    LOGGER.info(
+        f"Custom agents reloaded: {old_count} -> {len(agents)} agents"
+    )
+
+
+# Create the dynamic instruction callback
+dynamic_instruction = create_dynamic_instruction_callback()
 
 # Define the Agent
+# Note: sub_agents is initially just built-in agents
+# Custom agents are added via set_custom_agents() during initialization
 agent = Agent(
     name="planning_agent",
     model=get_model("planning_agent"),
-    instruction=get_dynamic_instruction,
+    instruction=dynamic_instruction,
     # Memory storage on final response detection
     after_model_callback=[save_memories_on_final_response],
-    sub_agents=[code_executor_agent, chart_generator_agent, research_agent, generic_executor_agent, mcp_agent]
+    sub_agents=BUILTIN_SUB_AGENTS,  # Custom agents added later
 )
 
 planning_agent = agent
