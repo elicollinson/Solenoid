@@ -1,8 +1,10 @@
 # chart_generator_agent/agent.py
+"""Chart Generator Agent - Creates visualizations using Pygal in a WASM sandbox."""
 import logging
 from google.adk.agents import Agent
 from app.agent.models.factory import get_model
 from app.agent.config import get_agent_prompt
+from app.agent.callbacks.memory import save_memories_on_final_response
 from app.agent.local_execution.adk_wrapper import ADKLocalWasmExecutor
 from pathlib import Path
 
@@ -26,6 +28,8 @@ agent = Agent(
     model=get_model("chart_generator_agent"),
     instruction=CHART_GENERATOR_PROMPT,
     code_executor=secure_executor,
+    # Memory storage on final response detection
+    after_model_callback=[save_memories_on_final_response],
     disallow_transfer_to_peers=True,
     disallow_transfer_to_parent=True  # Agent must complete task, not transfer back
 )

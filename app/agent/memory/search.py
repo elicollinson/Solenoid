@@ -3,14 +3,29 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence
+from typing import List, Sequence
 
 import sqlite3
 
-from .embeddings import NomicLocalEmbedder
+from .ollama_embeddings import OllamaEmbedder
 from .rerank import DEFAULT_RERANKER, rerank_texts
 
-EMB = NomicLocalEmbedder()
+# Lazy-initialized default embedder (avoids connection at import time)
+_DEFAULT_EMBEDDER: OllamaEmbedder | None = None
+
+
+def _get_default_embedder() -> OllamaEmbedder:
+    """Get or create the default embedder instance using config."""
+    global _DEFAULT_EMBEDDER
+    if _DEFAULT_EMBEDDER is None:
+        # Import here to avoid circular imports
+        from app.agent.config import get_embedding_config
+        config = get_embedding_config()
+        _DEFAULT_EMBEDDER = OllamaEmbedder(
+            host=config["host"],
+            model=config["model"]
+        )
+    return _DEFAULT_EMBEDDER
 
 
 @dataclass(slots=True)
@@ -45,7 +60,7 @@ def _hybrid_candidates(
     dense_limit: int,
     sparse_limit: int,
     fuse_top_k: int,
-    embedder: NomicLocalEmbedder,
+    embedder: OllamaEmbedder,
 ) -> List[MemoryRow]:
     qvec = embedder.embed_query(query_text)
     qblob = embedder.to_blob(qvec)
@@ -102,11 +117,11 @@ def search_memories(
     sparse_limit: int = 80,
     fuse_top_k: int = 30,
     reranker_model: str = DEFAULT_RERANKER,
-    embedder: NomicLocalEmbedder | None = None,
+    embedder: OllamaEmbedder | None = None,
 ) -> list[tuple[str, float, MemoryRow]]:
     """Return reranked memories for the calling agent."""
 
-    emb = embedder or EMB
+    emb = embedder or _get_default_embedder()
     if dense_limit <= 0 and sparse_limit <= 0:
         return []
 

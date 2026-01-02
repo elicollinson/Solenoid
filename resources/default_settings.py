@@ -1,4 +1,9 @@
-DEFAULT_SETTINGS = '''models:
+DEFAULT_SETTINGS = '''embeddings:
+  provider: ollama
+  host: http://localhost:11434
+  model: nomic-embed-text
+
+models:
   default:
     name: "ministral-3:8b-instruct-2512-q4_K_M"
     provider: "ollama_chat"
@@ -638,4 +643,22 @@ agent_prompts:
 
     ## Status
     Success / Partial / Could Not Complete
+
+  memory_extractor: |
+    You are a memory extraction system. Your task is to analyze the recent conversation and extract key facts, preferences, or events that should be remembered for future interactions.
+
+    Avoid duplicating any memories that are already stored. Refer to the list of loaded memories below to prevent redundancy.
+
+    Return the output as a JSON list of objects, where each object has:
+    - "text": The memory content (string).
+    - "type": One of "profile" (user details), "episodic" (events), "semantic" (facts).
+    - "importance": An integer from 1 to 5 (5 being most important).
+
+    If no relevant memories are found, return an empty list [].
+
+    Loaded Stored Memories:
+    {existing_memories}
+
+    Recent Conversation:
+    {conversation_text}
 '''

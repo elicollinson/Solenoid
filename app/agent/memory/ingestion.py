@@ -10,10 +10,26 @@ from typing import Iterable, Sequence
 
 import sqlite_vec
 
-from .embeddings import NomicLocalEmbedder
+from .ollama_embeddings import OllamaEmbedder
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
-EMB = NomicLocalEmbedder()
+
+# Lazy-initialized default embedder (avoids connection at import time)
+_DEFAULT_EMBEDDER: OllamaEmbedder | None = None
+
+
+def _get_default_embedder() -> OllamaEmbedder:
+    """Get or create the default embedder instance using config."""
+    global _DEFAULT_EMBEDDER
+    if _DEFAULT_EMBEDDER is None:
+        # Import here to avoid circular imports
+        from app.agent.config import get_embedding_config
+        config = get_embedding_config()
+        _DEFAULT_EMBEDDER = OllamaEmbedder(
+            host=config["host"],
+            model=config["model"]
+        )
+    return _DEFAULT_EMBEDDER
 
 
 def connect_db(
@@ -43,8 +59,9 @@ def apply_schema(conn: sqlite3.Connection, schema_path: Path | None = None) -> N
     conn.executescript(script)
 
 
-def _ensure_embedder(embedder: NomicLocalEmbedder | None) -> NomicLocalEmbedder:
-    return embedder or EMB
+def _ensure_embedder(embedder: OllamaEmbedder | None) -> OllamaEmbedder:
+    """Ensure we have an embedder instance."""
+    return embedder or _get_default_embedder()
 
 
 def upsert_memory(
@@ -58,7 +75,7 @@ def upsert_memory(
     importance: int = 1,
     tags: Iterable[str] | None = None,
     expires_at: int | None = None,
-    embedder: NomicLocalEmbedder | None = None,
+    embedder: OllamaEmbedder | None = None,
 ) -> int:
     """Insert a single memory row and its embedding."""
 
@@ -104,7 +121,7 @@ def upsert_kb_chunk(
     text: str,
     meta: dict | None = None,
     doc_id: str | None = None,
-    embedder: NomicLocalEmbedder | None = None,
+    embedder: OllamaEmbedder | None = None,
 ) -> int:
     """Insert a knowledge-base chunk and its vector."""
 
@@ -130,7 +147,6 @@ def upsert_kb_chunk(
 
 
 __all__ = [
-    "EMB",
     "apply_schema",
     "connect_db",
     "upsert_kb_chunk",

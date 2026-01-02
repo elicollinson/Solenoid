@@ -1,8 +1,12 @@
 # planning_agent/agent.py
+"""
+Planning Agent - The coordinator that delegates to specialist agents.
+"""
 import logging
 from google.adk.agents import Agent
 from app.agent.models.factory import get_model
 from app.agent.config import get_agent_prompt
+from app.agent.callbacks.memory import save_memories_on_final_response
 from app.agent.code_executor_agent.agent import code_executor_agent
 from app.agent.chart_generator_agent.agent import chart_generator_agent
 from app.agent.research_agent.agent import research_agent
@@ -45,6 +49,8 @@ agent = Agent(
     name="planning_agent",
     model=get_model("planning_agent"),
     instruction=get_dynamic_instruction,
+    # Memory storage on final response detection
+    after_model_callback=[save_memories_on_final_response],
     sub_agents=[code_executor_agent, chart_generator_agent, research_agent, generic_executor_agent, mcp_agent]
 )
 

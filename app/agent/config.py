@@ -51,6 +51,26 @@ def get_agent_prompt(agent_name: str, default: str = "") -> str:
     return prompt
 
 
+def get_embedding_config() -> dict:
+    """
+    Retrieve the embedding configuration from settings.
+
+    Returns:
+        Dictionary with embedding config, including:
+        - provider: 'ollama' (default)
+        - host: Ollama server URL (default: http://localhost:11434)
+        - model: Embedding model name (default: nomic-embed-text)
+    """
+    settings = load_settings()
+    embeddings = settings.get("embeddings", {})
+
+    return {
+        "provider": embeddings.get("provider", "ollama"),
+        "host": embeddings.get("host", "http://localhost:11434"),
+        "model": embeddings.get("model", "nomic-embed-text"),
+    }
+
+
 def clear_settings_cache():
     """Clear the cached settings. Useful for testing or dynamic reloading."""
     load_settings.cache_clear()

@@ -1,7 +1,10 @@
+# research_agent/agent.py
+"""Research Agent - Performs web searches and retrieves information."""
 import logging
 from google.adk.agents import Agent
 from app.agent.models.factory import get_model
 from app.agent.config import get_agent_prompt
+from app.agent.callbacks.memory import save_memories_on_final_response
 from app.agent.search.universal_search import create_universal_search_tool
 from app.agent.search.web_retrieval import read_webpage_tool
 
@@ -18,6 +21,8 @@ agent = Agent(
     model=get_model("research_agent"),
     instruction=RESEARCH_AGENT_PROMPT,
     tools=[search_tool, read_webpage_tool],
+    # Memory storage on final response detection
+    after_model_callback=[save_memories_on_final_response],
     disallow_transfer_to_peers=True,
     disallow_transfer_to_parent=True  # Agent must complete task, not transfer back
 )

@@ -91,13 +91,49 @@ def get_configured_model() -> str:
     return "ministral-3:8b"
 
 
+def get_configured_embedding_model() -> str:
+    """Get the embedding model name from settings."""
+    import yaml
+
+    # Try local project settings first, then home directory fallback
+    settings_paths = [Path("app_settings.yaml"), HOME_SETTINGS_PATH]
+
+    for path in settings_paths:
+        if path.exists():
+            try:
+                with open(path) as f:
+                    config = yaml.safe_load(f) or {}
+                    model_name = config.get("embeddings", {}).get("model")
+                    if model_name:
+                        return model_name
+            except:
+                pass
+
+    # Fallback to nomic-embed-text
+    return "nomic-embed-text"
+
+
 def check_model_exists(model_name: str) -> bool:
-    """Check if the model is already available in Ollama."""
+    """Check if the model is already available in Ollama.
+
+    Handles both exact matches and tag variations (e.g., 'model' matches 'model:latest').
+    """
     try:
         r = httpx.get(f"http://{OLLAMA_HOST}:{OLLAMA_PORT}/api/tags", timeout=5.0)
         if r.status_code == 200:
             models = r.json().get("models", [])
-            return any(m.get("name") == model_name for m in models)
+            for m in models:
+                name = m.get("name", "")
+                # Exact match
+                if name == model_name:
+                    return True
+                # Match without tag (e.g., 'nomic-embed-text' matches 'nomic-embed-text:latest')
+                if name.startswith(model_name + ":"):
+                    return True
+                # Match if model_name includes a tag
+                if model_name.startswith(name.split(":")[0] + ":"):
+                    return True
+            return False
     except:
         pass
     return False
@@ -175,11 +211,11 @@ def pull_model_with_progress(model_name: str) -> bool:
 
 def ensure_model_ready() -> bool:
     """
-    Pre-flight check: ensure Ollama is running and model is available.
+    Pre-flight check: ensure Ollama is running and models are available.
     Shows progress during model download if needed.
 
     Returns:
-        True if model is ready, False otherwise
+        True if all models are ready, False otherwise
     """
     print("Initializing Local Agent...")
 
@@ -192,22 +228,33 @@ def ensure_model_ready() -> bool:
         return False
     print("OK")
 
-    # Step 2: Check if model exists
+    # Step 2: Check if LLM model exists
     model_name = get_configured_model()
-    print(f"  Checking model '{model_name}'...", end=" ", flush=True)
+    print(f"  Checking LLM model '{model_name}'...", end=" ", flush=True)
 
     if check_model_exists(model_name):
         print("OK")
+    else:
+        print("not found")
         print()
-        return True
+        # Pull the LLM model with progress
+        if not pull_model_with_progress(model_name):
+            print(f"\nError: Failed to download model '{model_name}'", file=sys.stderr)
+            return False
 
-    print("not found")
-    print()
+    # Step 3: Check if embedding model exists
+    embedding_model = get_configured_embedding_model()
+    print(f"  Checking embedding model '{embedding_model}'...", end=" ", flush=True)
 
-    # Step 3: Pull the model with progress
-    if not pull_model_with_progress(model_name):
-        print(f"\nError: Failed to download model '{model_name}'", file=sys.stderr)
-        return False
+    if check_model_exists(embedding_model):
+        print("OK")
+    else:
+        print("not found")
+        print()
+        # Pull the embedding model with progress
+        if not pull_model_with_progress(embedding_model):
+            print(f"\nError: Failed to download embedding model '{embedding_model}'", file=sys.stderr)
+            return False
 
     print()
     return True
@@ -288,7 +335,7 @@ def main() -> int:
         return 1
 
     # Set up signal handler for clean shutdown
-    def signal_handler(signum, frame):
+    def signal_handler(_signum, _frame):
         server.stop()
         sys.exit(0)
 

@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import os
+# Disable tqdm before any imports that might use it
+# This prevents multiprocessing lock issues on Python 3.13 in thread contexts
+os.environ['TQDM_DISABLE'] = '1'
+
 from pathlib import Path
 from typing import Final
 
@@ -92,6 +97,7 @@ class NomicLocalEmbedder:
             [text],
             normalize_embeddings=False,
             convert_to_numpy=True,
+            show_progress_bar=False,  # Disable tqdm to avoid multiprocessing lock issues in thread pools
         )[0]
         arr = np.asarray(encoded, dtype=np.float32)
         arr = self._l2(arr)
