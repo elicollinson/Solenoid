@@ -14,7 +14,6 @@ python = ">=3.11,<3.14"
 google-adk = "^1.18.0"
 textual = "^6.5.0"
 numpy = "^2.3.4"
-sentence-transformers = "^5.1.2"
 sqlite-vec = "^0.1.6"
 pydantic = "^2.12.4"
 litellm = "^1.79.3"
@@ -31,8 +30,7 @@ transformers = ">=4.45,<5"
 pytest = ">=8.1.0"
 
 [tool.poetry.scripts]
-terminal-app = "app.main:main"
-local-agent = "main_bundled:main"
+solenoid = "main_bundled:main"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]

@@ -303,6 +303,8 @@ def suppress_logging() -> None:
     logging.getLogger("LiteLLM").setLevel(logging.ERROR)
 
 
+VERSION = "1.1.0"
+
 def main() -> int:
     """
     Main entry point for the bundled application.
@@ -310,6 +312,28 @@ def main() -> int:
     Returns:
         Exit code (0 for success, non-zero for errors)
     """
+    # Handle CLI flags before any heavy imports/operations
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+        if arg in ("--version", "-V"):
+            print(f"solenoid {VERSION}")
+            return 0
+        if arg in ("--help", "-h"):
+            print(f"""solenoid {VERSION} - A localized AI agent for the terminal
+
+Usage: solenoid [OPTIONS]
+
+Options:
+  -h, --help     Show this help message and exit
+  -V, --version  Show version and exit
+
+Solenoid starts a local AI agent with a terminal UI. It requires Ollama
+to be installed and running for model inference.
+
+For more information, visit: https://github.com/elicollinson/Solenoid
+""")
+            return 0
+
     # Ensure settings file exists in home directory
     ensure_settings_file()
 
