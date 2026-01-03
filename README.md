@@ -5,6 +5,25 @@
 # Solenoid
 A multi-agent system powered by Google ADK with an AG-UI compatible API server and Textual-based terminal client.
 
+## Installation
+
+### Homebrew (Recommended)
+
+```bash
+brew update
+brew tap elicollinson/solenoid
+brew install solenoid
+```
+
+Then run:
+```bash
+solenoid
+```
+
+### From Source
+
+See [Development](#development) section below for building from source with Poetry.
+
 ## Features
 
 - **Multi-Agent Architecture**: Hierarchical agent system with specialized agents for different tasks
@@ -476,6 +495,22 @@ poetry run python tests/eval/run_eval.py --runs 5
 ```
 
 This executes test cases from `tests/eval/agent_test_cases.csv` and generates reports in `tests/eval/eval_results/`.
+
+## Building a Standalone Binary
+
+You can package Solenoid as a standalone executable using PyInstaller:
+
+```bash
+# Install PyInstaller in your poetry environment
+poetry add --group dev pyinstaller
+
+# Build the binary using the spec file
+poetry run pyinstaller solenoid.spec
+```
+
+The executable will be created at `dist/solenoid`. This binary replicates the behavior of `poetry run local-agent` and can be distributed without requiring Python or Poetry to be installed.
+
+**Note:** The binary will be large (~500MB+) due to bundled ML dependencies (transformers, torch, sentence-transformers). Build time is also significant due to dependency collection.
 
 ## Development
 
