@@ -303,7 +303,7 @@ def suppress_logging() -> None:
     logging.getLogger("LiteLLM").setLevel(logging.ERROR)
 
 
-VERSION = "1.2.0"
+VERSION = "1.2.2"
 
 def main() -> int:
     """
