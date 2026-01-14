@@ -303,7 +303,7 @@ def suppress_logging() -> None:
     logging.getLogger("LiteLLM").setLevel(logging.ERROR)
 
 
-VERSION = "1.2.3"
+VERSION = "1.2.4"
 
 def main() -> int:
     """
@@ -326,12 +326,27 @@ Usage: solenoid [OPTIONS]
 Options:
   -h, --help     Show this help message and exit
   -V, --version  Show version and exit
+  --log          Show the last Homebrew install log
 
 Solenoid starts a local AI agent with a terminal UI. It requires Ollama
 to be installed and running for model inference.
 
 For more information, visit: https://github.com/elicollinson/Solenoid
 """)
+            return 0
+        if arg == "--log":
+            log_dir = Path.home() / "Library" / "Logs" / "Homebrew" / "solenoid"
+            if not log_dir.exists():
+                print(f"No Homebrew logs found at {log_dir}")
+                return 1
+            # Find the most recent log file
+            log_files = sorted(log_dir.glob("*.log"), key=lambda f: f.stat().st_mtime, reverse=True)
+            if not log_files:
+                print(f"No log files found in {log_dir}")
+                return 1
+            latest_log = log_files[0]
+            print(f"=== {latest_log} ===\n")
+            print(latest_log.read_text())
             return 0
 
     # Ensure settings file exists in home directory
