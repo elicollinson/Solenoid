@@ -1,0 +1,106 @@
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { parse as parseYaml } from 'yaml';
+import {
+  AppSettingsSchema,
+  type AppSettings,
+  type ModelConfig,
+  type AgentName,
+  AGENT_NAMES,
+} from './schema.js';
+
+const DEFAULT_SETTINGS_FILENAME = 'app_settings.yaml';
+
+let cachedSettings: AppSettings | null = null;
+let settingsPath: string | null = null;
+
+export function findSettingsFile(startDir: string = process.cwd()): string | null {
+  let dir = startDir;
+  const root = dirname(dir);
+
+  while (dir !== root) {
+    const candidate = resolve(dir, DEFAULT_SETTINGS_FILENAME);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    dir = dirname(dir);
+  }
+
+  const rootCandidate = resolve(root, DEFAULT_SETTINGS_FILENAME);
+  if (existsSync(rootCandidate)) {
+    return rootCandidate;
+  }
+
+  return null;
+}
+
+export function loadSettings(path?: string): AppSettings {
+  const configPath = path ?? findSettingsFile();
+
+  if (!configPath) {
+    throw new Error(
+      `Configuration file not found. Create ${DEFAULT_SETTINGS_FILENAME} or specify a path.`
+    );
+  }
+
+  if (cachedSettings && settingsPath === configPath) {
+    return cachedSettings;
+  }
+
+  const content = readFileSync(configPath, 'utf-8');
+  const raw = parseYaml(content);
+  const result = AppSettingsSchema.safeParse(raw);
+
+  if (!result.success) {
+    const errors = result.error.errors
+      .map((e) => `  - ${e.path.join('.')}: ${e.message}`)
+      .join('\n');
+    throw new Error(`Invalid configuration in ${configPath}:\n${errors}`);
+  }
+
+  cachedSettings = result.data;
+  settingsPath = configPath;
+
+  return result.data;
+}
+
+export function getModelConfig(agentName: AgentName, settings?: AppSettings): ModelConfig {
+  const config = settings ?? loadSettings();
+
+  const agentConfig = config.models.agents?.[agentName];
+  if (agentConfig) {
+    return {
+      name: agentConfig.name ?? config.models.default.name,
+      provider: agentConfig.provider ?? config.models.default.provider,
+      context_length: agentConfig.context_length ?? config.models.default.context_length,
+    };
+  }
+
+  return config.models.default;
+}
+
+export function getAgentPrompt(
+  agentName: AgentName,
+  settings?: AppSettings,
+  variables?: Record<string, string>
+): string | undefined {
+  const config = settings ?? loadSettings();
+  let prompt = config.agent_prompts[agentName];
+
+  if (prompt && variables) {
+    for (const [key, value] of Object.entries(variables)) {
+      prompt = prompt.replace(new RegExp(`\\{${key}\\}`, 'g'), value);
+    }
+  }
+
+  return prompt;
+}
+
+export function clearSettingsCache(): void {
+  cachedSettings = null;
+  settingsPath = null;
+}
+
+export function isValidAgentName(name: string): name is AgentName {
+  return AGENT_NAMES.includes(name as AgentName);
+}

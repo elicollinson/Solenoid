@@ -1,0 +1,62 @@
+{
+  "name": "solenoid",
+  "version": "2.0.0-alpha.1",
+  "description": "Multi-agent AI assistant with local LLM inference",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "solenoid": "./dist/cli.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:ui": "tsx watch src/ui/index.tsx",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "eslint src --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "llm",
+    "ollama",
+    "cli",
+    "terminal"
+  ],
+  "author": "Eli Collinson",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@google/genai": "^0.14.0",
+    "@hono/node-server": "^1.19.9",
+    "@hono/zod-validator": "^0.4.3",
+    "@inkjs/ui": "^2.0.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^11.8.1",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "hono": "^4.7.6",
+    "ink": "^5.2.0",
+    "ollama": "^0.5.14",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "react": "^18.3.1",
+    "yaml": "^2.7.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.15.17",
+    "@types/react": "^18.3.18",
+    "tsx": "^4.19.4",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.6"
+  }
+}
