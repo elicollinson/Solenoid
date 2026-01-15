@@ -6,8 +6,18 @@ import { streamSSE } from 'hono/streaming';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { loadSettings } from '../config/index.js';
+import { createAgentHierarchy, type AgentRunner } from '../agents/index.js';
 
 const app = new Hono();
+let agentRunner: AgentRunner | null = null;
+
+function getAgentRunner(): AgentRunner {
+  if (!agentRunner) {
+    const { runner } = createAgentHierarchy();
+    agentRunner = runner;
+  }
+  return agentRunner;
+}
 
 app.use('/*', cors());
 app.use('/*', logger());
@@ -34,7 +44,7 @@ app.get('/config', (c) => {
       },
       mcp_servers: Object.keys(settings.mcp_servers),
     });
-  } catch (error) {
+  } catch {
     return c.json({ error: 'Configuration not loaded' }, 500);
   }
 });
@@ -55,6 +65,13 @@ app.post('/api/agent', zValidator('json', RunAgentInputSchema), async (c) => {
   const runId = input.run_id ?? crypto.randomUUID();
   const threadId = input.thread_id ?? crypto.randomUUID();
 
+  const lastUserMessage = input.messages.findLast(
+    (m: { role: string; content: string }) => m.role === 'user'
+  );
+  if (!lastUserMessage) {
+    return c.json({ error: 'No user message provided' }, 400);
+  }
+
   return streamSSE(c, async (stream) => {
     await stream.writeSSE({
       event: 'run_started',
@@ -65,33 +82,95 @@ app.post('/api/agent', zValidator('json', RunAgentInputSchema), async (c) => {
       }),
     });
 
-    await stream.writeSSE({
-      event: 'text_message_start',
-      data: JSON.stringify({
-        type: 'TEXT_MESSAGE_START',
-        message_id: crypto.randomUUID(),
-        role: 'assistant',
-      }),
-    });
+    const messageId = crypto.randomUUID();
+    let messageStarted = false;
 
-    const placeholder = 'Agent system not yet implemented. This is a placeholder response.';
-    for (const char of placeholder) {
+    try {
+      const runner = getAgentRunner();
+
+      for await (const chunk of runner.run(lastUserMessage.content, threadId)) {
+        if (chunk.type === 'text' && chunk.content) {
+          if (!messageStarted) {
+            await stream.writeSSE({
+              event: 'text_message_start',
+              data: JSON.stringify({
+                type: 'TEXT_MESSAGE_START',
+                message_id: messageId,
+                role: 'assistant',
+              }),
+            });
+            messageStarted = true;
+          }
+
+          await stream.writeSSE({
+            event: 'text_message_content',
+            data: JSON.stringify({
+              type: 'TEXT_MESSAGE_CONTENT',
+              delta: chunk.content,
+            }),
+          });
+        }
+
+        if (chunk.type === 'tool_call' && chunk.toolCall) {
+          await stream.writeSSE({
+            event: 'tool_call_start',
+            data: JSON.stringify({
+              type: 'TOOL_CALL_START',
+              tool_call_id: crypto.randomUUID(),
+              tool_name: chunk.toolCall.function.name,
+            }),
+          });
+        }
+
+        if (chunk.type === 'transfer' && chunk.transferTo) {
+          await stream.writeSSE({
+            event: 'agent_transfer',
+            data: JSON.stringify({
+              type: 'AGENT_TRANSFER',
+              from_agent: 'current',
+              to_agent: chunk.transferTo,
+            }),
+          });
+        }
+      }
+
+      if (messageStarted) {
+        await stream.writeSSE({
+          event: 'text_message_end',
+          data: JSON.stringify({
+            type: 'TEXT_MESSAGE_END',
+          }),
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      if (!messageStarted) {
+        await stream.writeSSE({
+          event: 'text_message_start',
+          data: JSON.stringify({
+            type: 'TEXT_MESSAGE_START',
+            message_id: messageId,
+            role: 'assistant',
+          }),
+        });
+      }
+
       await stream.writeSSE({
         event: 'text_message_content',
         data: JSON.stringify({
           type: 'TEXT_MESSAGE_CONTENT',
-          delta: char,
+          delta: `Error: ${errorMessage}`,
         }),
       });
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
 
-    await stream.writeSSE({
-      event: 'text_message_end',
-      data: JSON.stringify({
-        type: 'TEXT_MESSAGE_END',
-      }),
-    });
+      await stream.writeSSE({
+        event: 'text_message_end',
+        data: JSON.stringify({
+          type: 'TEXT_MESSAGE_END',
+        }),
+      });
+    }
 
     await stream.writeSSE({
       event: 'run_finished',
