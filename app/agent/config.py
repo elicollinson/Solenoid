@@ -1,32 +1,36 @@
 # app/agent/config.py
 """Centralized configuration loader for agent prompts and settings."""
 
-import os
 import yaml
 import logging
 from functools import lru_cache
 from typing import Optional
 
-LOGGER = logging.getLogger(__name__)
+from resources.backend_config import get_settings_path
 
-# Project root is ../../ from this file (app/agent/config.py -> project root)
-_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+LOGGER = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
-def load_settings(config_path: str = "app_settings.yaml") -> dict:
-    """Load the application settings from YAML. Results are cached."""
-    absolute_config_path = os.path.join(_PROJECT_ROOT, config_path)
+def load_settings() -> dict:
+    """
+    Load the application settings from YAML. Results are cached.
 
-    if not os.path.exists(absolute_config_path):
-        LOGGER.warning(f"Config file not found at {absolute_config_path}. Using defaults.")
+    Uses the unified settings path resolution from backend_config,
+    which checks for local development settings first, then falls
+    back to the platform-specific config directory.
+    """
+    settings_path = get_settings_path()
+
+    if not settings_path.exists():
+        LOGGER.warning(f"Config file not found at {settings_path}. Using defaults.")
         return {}
 
     try:
-        with open(absolute_config_path, "r") as f:
+        with open(settings_path, "r") as f:
             return yaml.safe_load(f) or {}
     except Exception as e:
-        LOGGER.error(f"Error loading config from {absolute_config_path}: {e}")
+        LOGGER.error(f"Error loading config from {settings_path}: {e}")
         return {}
 
 

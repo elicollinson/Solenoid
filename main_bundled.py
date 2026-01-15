@@ -34,8 +34,11 @@ import httpx
 from app.server.manager import create_backend_server
 from app.server.main import app as fastapi_app
 from resources.default_settings import DEFAULT_SETTINGS
-from resources.backend_config import BACKEND_HOST, OLLAMA_HOST, OLLAMA_PORT, HOME_SETTINGS_PATH, BACKEND_PORT, HEALTH_CHECK_URL, HEALTH_CHECK_TIMEOUT, HEALTH_CHECK_INTERVAL
-
+from resources.backend_config import (
+    BACKEND_HOST, BACKEND_PORT,
+    OLLAMA_HOST, OLLAMA_PORT,
+    get_settings_path, get_config_dir, get_log_dir, get_log_file,
+)
 
 
 
@@ -70,44 +73,38 @@ def ensure_ollama_running() -> bool:
 
 
 def get_configured_model() -> str:
-    """Get the model name from settings."""
+    """Get the model name from settings using unified path resolution."""
     import yaml
 
-    # Try local project settings first, then home directory fallback
-    settings_paths = [Path("app_settings.yaml"), HOME_SETTINGS_PATH]
-
-    for path in settings_paths:
-        if path.exists():
-            try:
-                with open(path) as f:
-                    config = yaml.safe_load(f) or {}
-                    model_name = config.get("models", {}).get("default", {}).get("name")
-                    if model_name:
-                        return model_name
-            except:
-                pass
+    settings_path = get_settings_path()
+    if settings_path.exists():
+        try:
+            with open(settings_path) as f:
+                config = yaml.safe_load(f) or {}
+                model_name = config.get("models", {}).get("default", {}).get("name")
+                if model_name:
+                    return model_name
+        except:
+            pass
 
     # Fallback only if no settings file found
     return "ministral-3:8b"
 
 
 def get_configured_embedding_model() -> str:
-    """Get the embedding model name from settings."""
+    """Get the embedding model name from settings using unified path resolution."""
     import yaml
 
-    # Try local project settings first, then home directory fallback
-    settings_paths = [Path("app_settings.yaml"), HOME_SETTINGS_PATH]
-
-    for path in settings_paths:
-        if path.exists():
-            try:
-                with open(path) as f:
-                    config = yaml.safe_load(f) or {}
-                    model_name = config.get("embeddings", {}).get("model")
-                    if model_name:
-                        return model_name
-            except:
-                pass
+    settings_path = get_settings_path()
+    if settings_path.exists():
+        try:
+            with open(settings_path) as f:
+                config = yaml.safe_load(f) or {}
+                model_name = config.get("embeddings", {}).get("model")
+                if model_name:
+                    return model_name
+        except:
+            pass
 
     # Fallback to nomic-embed-text
     return "nomic-embed-text"
@@ -264,24 +261,37 @@ def ensure_model_ready() -> bool:
 # Settings and Logging
 # =============================================================================
 
-# Log file location following macOS conventions
-APP_LOG_DIR = Path.home() / "Library" / "Logs" / "Solenoid"
-APP_LOG_FILE = APP_LOG_DIR / "solenoid.log"
-
-
 def ensure_settings_file() -> None:
-    """Create default app_settings.yaml in home directory if it doesn't exist."""
-    if not HOME_SETTINGS_PATH.exists():
-        HOME_SETTINGS_PATH.write_text(DEFAULT_SETTINGS)
+    """Create default settings file if it doesn't exist.
+
+    Also handles migration from old settings location (~/app_settings.yaml)
+    to the new platform-specific location.
+    """
+    settings_path = get_settings_path()
+
+    # Check for legacy settings at ~/app_settings.yaml and migrate if needed
+    legacy_path = Path.home() / "app_settings.yaml"
+    if legacy_path.exists() and not settings_path.exists():
+        # Migrate legacy settings to new location
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(legacy_path.read_text())
+        # Optionally remove the old file (or keep it as backup)
+        # legacy_path.unlink()  # Uncomment to remove old file
+        return
+
+    if not settings_path.exists():
+        # Ensure config directory exists
+        settings_path.parent.mkdir(parents=True, exist_ok=True)
+        settings_path.write_text(DEFAULT_SETTINGS)
 
 
 def setup_file_logging() -> None:
     """Set up file-based logging to capture all app logs."""
-    # Ensure log directory exists
-    APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_dir = get_log_dir()
+    log_file = get_log_file()
 
     # Create a file handler that captures DEBUG and above
-    file_handler = logging.FileHandler(APP_LOG_FILE, mode='w')  # Overwrite each session
+    file_handler = logging.FileHandler(log_file, mode='w')  # Overwrite each session
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -323,7 +333,7 @@ def suppress_console_logging() -> None:
                 logger.removeHandler(handler)
 
 
-VERSION = "1.2.5"
+VERSION = "1.2.6"
 
 def main() -> int:
     """
@@ -339,6 +349,8 @@ def main() -> int:
             print(f"solenoid {VERSION}")
             return 0
         if arg in ("--help", "-h"):
+            config_dir = get_config_dir()
+            log_file = get_log_file()
             print(f"""solenoid {VERSION} - A localized AI agent for the terminal
 
 Usage: solenoid [OPTIONS]
@@ -351,21 +363,23 @@ Options:
 Solenoid starts a local AI agent with a terminal UI. It requires Ollama
 to be installed and running for model inference.
 
-Log file location: ~/Library/Logs/Solenoid/solenoid.log
+Configuration: {config_dir}/settings.yaml
+Log file:      {log_file}
 
 For more information, visit: https://github.com/elicollinson/Solenoid
 """)
             return 0
         if arg == "--log":
-            if not APP_LOG_FILE.exists():
-                print(f"No app log found at {APP_LOG_FILE}")
+            log_file = get_log_file()
+            if not log_file.exists():
+                print(f"No app log found at {log_file}")
                 print("Run solenoid at least once to generate logs.")
                 return 1
-            print(f"=== {APP_LOG_FILE} ===\n")
-            print(APP_LOG_FILE.read_text())
+            print(f"=== {log_file} ===\n")
+            print(log_file.read_text())
             return 0
 
-    # Ensure settings file exists in home directory
+    # Ensure settings file exists
     ensure_settings_file()
 
     # Pre-flight: ensure Ollama and model are ready BEFORE starting backend
