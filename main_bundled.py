@@ -264,46 +264,66 @@ def ensure_model_ready() -> bool:
 # Settings and Logging
 # =============================================================================
 
+# Log file location following macOS conventions
+APP_LOG_DIR = Path.home() / "Library" / "Logs" / "Solenoid"
+APP_LOG_FILE = APP_LOG_DIR / "solenoid.log"
+
+
 def ensure_settings_file() -> None:
     """Create default app_settings.yaml in home directory if it doesn't exist."""
     if not HOME_SETTINGS_PATH.exists():
         HOME_SETTINGS_PATH.write_text(DEFAULT_SETTINGS)
 
 
-def suppress_logging() -> None:
-    """Suppress noisy loggers for a clean terminal experience."""
-    # Set root logger to ERROR
-    logging.getLogger().setLevel(logging.ERROR)
+def setup_file_logging() -> None:
+    """Set up file-based logging to capture all app logs."""
+    # Ensure log directory exists
+    APP_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Suppress uvicorn internal logs
-    logging.getLogger("uvicorn").setLevel(logging.ERROR)
-    logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
-    logging.getLogger("uvicorn.access").setLevel(logging.ERROR)
+    # Create a file handler that captures DEBUG and above
+    file_handler = logging.FileHandler(APP_LOG_FILE, mode='w')  # Overwrite each session
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ))
 
-    # Suppress FastAPI/app logs
-    logging.getLogger("app").setLevel(logging.ERROR)
-    logging.getLogger("app.server").setLevel(logging.ERROR)
-    logging.getLogger("httpx").setLevel(logging.ERROR)
-    logging.getLogger("httpcore").setLevel(logging.ERROR)
-
-    # Suppress asyncio debug logs
-    logging.getLogger("asyncio").setLevel(logging.ERROR)
-
-    # Suppress AG-UI ADK logs
-    logging.getLogger("ag_ui_adk").setLevel(logging.ERROR)
-    logging.getLogger("ag_ui_adk.session_manager").setLevel(logging.ERROR)
-    logging.getLogger("ag_ui_adk.event_translator").setLevel(logging.ERROR)
-
-    # Suppress Google ADK logs
-    logging.getLogger("google.adk").setLevel(logging.ERROR)
-    logging.getLogger("google_genai").setLevel(logging.ERROR)
-
-    # Suppress LiteLLM logs
-    logging.getLogger("litellm").setLevel(logging.ERROR)
-    logging.getLogger("LiteLLM").setLevel(logging.ERROR)
+    # Add file handler to root logger
+    root_logger = logging.getLogger()
+    root_logger.addHandler(file_handler)
+    root_logger.setLevel(logging.DEBUG)  # Capture everything to file
 
 
-VERSION = "1.2.4"
+def suppress_console_logging() -> None:
+    """Suppress console output while keeping file logging active."""
+    # Remove any existing console handlers and set root to only use file
+    root_logger = logging.getLogger()
+
+    # Create a NullHandler for console suppression
+    # The file handler added by setup_file_logging() will still capture logs
+    for handler in root_logger.handlers[:]:
+        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            root_logger.removeHandler(handler)
+
+    # Add a NullHandler to prevent "No handler found" warnings
+    # but actual logging goes to the file handler
+
+    # Set console-only loggers to not propagate or use ERROR level for any new handlers
+    console_loggers = [
+        "uvicorn", "uvicorn.error", "uvicorn.access",
+        "app", "app.server", "httpx", "httpcore", "asyncio",
+        "ag_ui_adk", "ag_ui_adk.session_manager", "ag_ui_adk.event_translator",
+        "google.adk", "google_genai", "litellm", "LiteLLM"
+    ]
+
+    for logger_name in console_loggers:
+        logger = logging.getLogger(logger_name)
+        # Remove stream handlers but keep file handlers
+        for handler in logger.handlers[:]:
+            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+                logger.removeHandler(handler)
+
+
+VERSION = "1.2.5"
 
 def main() -> int:
     """
@@ -326,27 +346,23 @@ Usage: solenoid [OPTIONS]
 Options:
   -h, --help     Show this help message and exit
   -V, --version  Show version and exit
-  --log          Show the last Homebrew install log
+  --log          Show the application log from the last session
 
 Solenoid starts a local AI agent with a terminal UI. It requires Ollama
 to be installed and running for model inference.
+
+Log file location: ~/Library/Logs/Solenoid/solenoid.log
 
 For more information, visit: https://github.com/elicollinson/Solenoid
 """)
             return 0
         if arg == "--log":
-            log_dir = Path.home() / "Library" / "Logs" / "Homebrew" / "solenoid"
-            if not log_dir.exists():
-                print(f"No Homebrew logs found at {log_dir}")
+            if not APP_LOG_FILE.exists():
+                print(f"No app log found at {APP_LOG_FILE}")
+                print("Run solenoid at least once to generate logs.")
                 return 1
-            # Find the most recent log file
-            log_files = sorted(log_dir.glob("*.log"), key=lambda f: f.stat().st_mtime, reverse=True)
-            if not log_files:
-                print(f"No log files found in {log_dir}")
-                return 1
-            latest_log = log_files[0]
-            print(f"=== {latest_log} ===\n")
-            print(latest_log.read_text())
+            print(f"=== {APP_LOG_FILE} ===\n")
+            print(APP_LOG_FILE.read_text())
             return 0
 
     # Ensure settings file exists in home directory
@@ -357,8 +373,9 @@ For more information, visit: https://github.com/elicollinson/Solenoid
     if not ensure_model_ready():
         return 1
 
-    # Suppress backend logging for clean frontend experience
-    suppress_logging()
+    # Set up file logging to capture all app logs, then suppress console output
+    setup_file_logging()
+    suppress_console_logging()
 
     # Start the backend server using the manager (enables restart from TUI)
     server = create_backend_server(
