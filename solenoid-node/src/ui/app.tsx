@@ -26,6 +26,7 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
   const [status, setStatus] = useState('Ready');
   const [screen, setScreen] = useState<Screen>('chat');
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [threadId] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     uiLogger.debug('App useEffect: loading settings');
@@ -141,6 +142,7 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            thread_id: threadId,
             messages: [{ role: 'user', content: text }],
           }),
         });
