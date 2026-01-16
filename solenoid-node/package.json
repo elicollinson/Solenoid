@@ -11,9 +11,11 @@
   "scripts": {
     "dev": "tsx watch --ignore logs src/index.ts",
     "dev:server": "tsx watch --ignore logs src/server/index.ts",
+    "dev:server:quiet": "SOLENOID_QUIET=1 tsx watch --ignore logs src/server/index.ts",
     "dev:ui": "tsx watch --ignore logs src/ui/index.tsx",
     "start:ui": "tsx src/ui/index.tsx",
     "start:server": "tsx src/server/index.ts",
+    "start:server:quiet": "SOLENOID_QUIET=1 tsx src/server/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "vitest",

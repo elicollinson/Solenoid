@@ -47,7 +47,19 @@ function getAgentRunner(): AgentRunner {
 }
 
 app.use('/*', cors());
-app.use('/*', logger());
+
+// Only use console logger if not in quiet mode (UI running)
+if (!process.env['SOLENOID_QUIET']) {
+  app.use('/*', logger());
+}
+
+// Always log requests to file
+app.use('/*', async (c, next) => {
+  const start = Date.now();
+  await next();
+  const ms = Date.now() - start;
+  serverLogger.info({ method: c.req.method, path: c.req.path, status: c.res.status, ms }, 'request');
+});
 
 app.get('/health', (c) => {
   return c.json({
