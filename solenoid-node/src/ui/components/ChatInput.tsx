@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { TextInput } from '@inkjs/ui';
+import { uiLogger } from '../../utils/logger.js';
 
 interface ChatInputProps {
   onSubmit: (value: string) => void;
@@ -15,17 +16,25 @@ export function ChatInput({
 }: ChatInputProps) {
   const [key, setKey] = useState(0);
 
+  const handleChange = useCallback((value: string) => {
+    uiLogger.trace({ value, length: value.length }, 'ChatInput onChange');
+  }, []);
+
   const handleSubmit = useCallback(
     (text: string) => {
+      uiLogger.debug({ text }, 'ChatInput handleSubmit');
       const trimmed = text.trim();
       if (trimmed) {
         onSubmit(trimmed);
         // Force TextInput to reset by changing its key
         setKey((k) => k + 1);
+        uiLogger.debug({ newKey: key + 1 }, 'ChatInput key incremented');
       }
     },
-    [onSubmit]
+    [onSubmit, key]
   );
+
+  uiLogger.trace({ key, isDisabled, placeholder }, 'ChatInput render');
 
   return (
     <Box borderStyle="round" borderColor={isDisabled ? 'gray' : 'green'} paddingX={1}>
@@ -33,6 +42,7 @@ export function ChatInput({
       <TextInput
         key={key}
         placeholder={placeholder}
+        onChange={handleChange}
         onSubmit={handleSubmit}
         isDisabled={isDisabled}
       />

@@ -7,6 +7,9 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { loadSettings } from '../config/index.js';
 import { createAgentHierarchy, createAgentHierarchySync, type AgentRunner } from '../agents/index.js';
+import { serverLogger, setupErrorHandlers } from '../utils/logger.js';
+
+setupErrorHandlers(serverLogger);
 
 const app = new Hono();
 let agentRunner: AgentRunner | null = null;
@@ -16,14 +19,18 @@ async function initializeRunner(): Promise<void> {
   if (agentRunner) return;
   if (initPromise) return initPromise;
 
+  serverLogger.info('Initializing agent runner');
+
   initPromise = (async () => {
     try {
       const { runner } = await createAgentHierarchy();
       agentRunner = runner;
+      serverLogger.info('Agent hierarchy initialized (async)');
     } catch (error) {
-      console.warn('Async agent initialization failed, falling back to sync:', error);
+      serverLogger.warn({ error }, 'Async agent initialization failed, falling back to sync');
       const { runner } = createAgentHierarchySync();
       agentRunner = runner;
+      serverLogger.info('Agent hierarchy initialized (sync fallback)');
     }
   })();
 
@@ -207,7 +214,7 @@ export function createServer() {
 }
 
 export async function startServer(port: number = 8001) {
-  console.log(`Starting Solenoid server on port ${port}...`);
+  serverLogger.info({ port }, 'Starting Solenoid server');
 
   // Initialize agent runner (with MCP connections) before starting server
   await initializeRunner();
@@ -217,8 +224,7 @@ export async function startServer(port: number = 8001) {
     port,
   });
 
-  console.log(`Server running at http://localhost:${port}`);
-  console.log(`Health check: http://localhost:${port}/health`);
+  serverLogger.info({ port, url: `http://localhost:${port}` }, 'Server started');
 
   return server;
 }

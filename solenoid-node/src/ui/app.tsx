@@ -11,6 +11,7 @@ import {
   type ToolCall,
 } from './components/index.js';
 import { loadSettings, type AppSettings } from '../config/index.js';
+import { uiLogger } from '../utils/logger.js';
 
 type Screen = 'chat' | 'settings' | 'help';
 
@@ -27,11 +28,13 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
   useEffect(() => {
+    uiLogger.debug('App useEffect: loading settings');
     try {
       const loaded = loadSettings();
       setSettings(loaded);
-    } catch {
-      // Settings not available
+      uiLogger.info('Settings loaded successfully');
+    } catch (error) {
+      uiLogger.warn({ error }, 'Settings not available');
     }
   }, []);
 
@@ -41,14 +44,17 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
 
   useInput(
     (char, key) => {
+      uiLogger.debug({ char, key, screen, inputActive }, 'useInput received');
       if (screen !== 'chat') {
         if (key.escape) {
+          uiLogger.info('Escape pressed, returning to chat');
           setScreen('chat');
         }
         return;
       }
       // These work when loading (user might want to see they can quit)
       if (key.ctrl && char === 'c') {
+        uiLogger.info('Ctrl+C pressed, exiting');
         exit();
       }
     },
@@ -103,8 +109,11 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
 
   const handleSubmit = useCallback(
     async (text: string) => {
+      uiLogger.info({ text }, 'handleSubmit called');
+
       // Handle slash commands
       if (text.startsWith('/')) {
+        uiLogger.debug({ text }, 'Processing slash command');
         handleSlashCommand(text);
         return;
       }
@@ -114,6 +123,7 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
         role: 'user',
         content: text,
       };
+      uiLogger.debug({ messageId: userMessage.id }, 'Adding user message');
       setMessages((prev) => [...prev, userMessage]);
       setIsLoading(true);
       setStatus('Thinking...');
