@@ -6,4 +6,7 @@ export * from './prime.js';
 export * from './planning.js';
 export * from './research.js';
 export * from './generic.js';
+export * from './code-executor.js';
+export * from './chart-generator.js';
+export * from './mcp.js';
 export * from './factory.js';

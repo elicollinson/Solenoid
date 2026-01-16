@@ -6,14 +6,34 @@ import { streamSSE } from 'hono/streaming';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { loadSettings } from '../config/index.js';
-import { createAgentHierarchy, type AgentRunner } from '../agents/index.js';
+import { createAgentHierarchy, createAgentHierarchySync, type AgentRunner } from '../agents/index.js';
 
 const app = new Hono();
 let agentRunner: AgentRunner | null = null;
+let initPromise: Promise<void> | null = null;
+
+async function initializeRunner(): Promise<void> {
+  if (agentRunner) return;
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    try {
+      const { runner } = await createAgentHierarchy();
+      agentRunner = runner;
+    } catch (error) {
+      console.warn('Async agent initialization failed, falling back to sync:', error);
+      const { runner } = createAgentHierarchySync();
+      agentRunner = runner;
+    }
+  })();
+
+  return initPromise;
+}
 
 function getAgentRunner(): AgentRunner {
   if (!agentRunner) {
-    const { runner } = createAgentHierarchy();
+    // Fallback to sync if called before async init completes
+    const { runner } = createAgentHierarchySync();
     agentRunner = runner;
   }
   return agentRunner;
@@ -188,6 +208,9 @@ export function createServer() {
 
 export async function startServer(port: number = 8001) {
   console.log(`Starting Solenoid server on port ${port}...`);
+
+  // Initialize agent runner (with MCP connections) before starting server
+  await initializeRunner();
 
   const server = serve({
     fetch: app.fetch,
