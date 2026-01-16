@@ -1,10 +1,27 @@
 import { Box, Text } from 'ink';
-import type { FC } from 'react';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const MarkdownRaw = require('ink-markdown');
+import { useState, useEffect, type FC, type ReactElement } from 'react';
 
-// Type assertion for ink-markdown which has incomplete types
-const Markdown: FC<{ children: string }> = MarkdownRaw.default || MarkdownRaw;
+// Lazy-load markdown component to avoid ESM/CJS issues
+let MarkdownComponent: FC<{ children: string }> | null = null;
+
+function Markdown({ children }: { children: string }): ReactElement {
+  const [Md, setMd] = useState<FC<{ children: string }> | null>(MarkdownComponent);
+
+  useEffect(() => {
+    if (!MarkdownComponent) {
+      import('ink-markdown').then((mod) => {
+        MarkdownComponent = mod.default as unknown as FC<{ children: string }>;
+        setMd(() => MarkdownComponent);
+      });
+    }
+  }, []);
+
+  if (!Md) {
+    return <Text>{children}</Text>;
+  }
+
+  return <Md>{children}</Md>;
+}
 
 export interface ToolCall {
   id: string;
