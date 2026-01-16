@@ -35,20 +35,25 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
     }
   }, []);
 
-  useInput((char, key) => {
-    if (screen !== 'chat') {
-      if (key.escape) {
-        setScreen('chat');
+  // Handle keyboard shortcuts only when not typing in the chat input
+  // When on chat screen and not loading, TextInput handles all input
+  const inputActive = screen !== 'chat' || isLoading;
+
+  useInput(
+    (char, key) => {
+      if (screen !== 'chat') {
+        if (key.escape) {
+          setScreen('chat');
+        }
+        return;
       }
-      return;
-    }
-    if (key.ctrl && char === 'c') {
-      exit();
-    }
-    if (key.ctrl && char === 'l') {
-      setMessages([]);
-    }
-  });
+      // These work when loading (user might want to see they can quit)
+      if (key.ctrl && char === 'c') {
+        exit();
+      }
+    },
+    { isActive: inputActive }
+  );
 
   const handleSlashCommand = useCallback(
     (command: string): boolean => {

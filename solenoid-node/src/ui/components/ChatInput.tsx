@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { TextInput } from '@inkjs/ui';
 
@@ -12,17 +13,25 @@ export function ChatInput({
   isDisabled = false,
   placeholder = 'Ask the agent...',
 }: ChatInputProps) {
-  const handleSubmit = (text: string) => {
-    const trimmed = text.trim();
-    if (trimmed) {
-      onSubmit(trimmed);
-    }
-  };
+  const [key, setKey] = useState(0);
+
+  const handleSubmit = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (trimmed) {
+        onSubmit(trimmed);
+        // Force TextInput to reset by changing its key
+        setKey((k) => k + 1);
+      }
+    },
+    [onSubmit]
+  );
 
   return (
     <Box borderStyle="round" borderColor={isDisabled ? 'gray' : 'green'} paddingX={1}>
       <Text color={isDisabled ? 'gray' : 'green'}>{'> '}</Text>
       <TextInput
+        key={key}
         placeholder={placeholder}
         onSubmit={handleSubmit}
         isDisabled={isDisabled}
