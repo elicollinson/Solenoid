@@ -7,12 +7,16 @@ export interface ToolCall {
   result?: string;
 }
 
+export type MessagePart =
+  | { type: 'text'; content: string }
+  | { type: 'tool_call'; toolCall: ToolCall };
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string; // Keep for backward compat / simple messages
   isStreaming?: boolean;
-  toolCalls?: ToolCall[];
+  parts?: MessagePart[]; // Interleaved content
   agentName?: string;
 }
 
@@ -63,26 +67,46 @@ function MessageBubble({ message }: { message: Message }) {
 
   const label = message.agentName || roleLabels[message.role];
 
-  return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Text bold color={roleColors[message.role]}>
-        {label}
-      </Text>
-      {message.toolCalls && message.toolCalls.length > 0 && (
-        <Box flexDirection="column" paddingLeft={2}>
-          {message.toolCalls.map((tc) => (
-            <ToolCallDisplay key={tc.id} toolCall={tc} />
-          ))}
-        </Box>
-      )}
-      {message.content && (
+  // Render interleaved parts if available
+  const renderParts = () => {
+    if (!message.parts || message.parts.length === 0) {
+      // Fallback to simple content
+      if (!message.content) return null;
+      return (
         <Box paddingLeft={2}>
           <Text wrap="wrap">
             {message.content}
             {message.isStreaming && <Text color="gray">▌</Text>}
           </Text>
         </Box>
-      )}
+      );
+    }
+
+    return message.parts.map((part, index) => {
+      if (part.type === 'text') {
+        const isLast = index === message.parts!.length - 1;
+        return (
+          <Box key={`text-${index}`} paddingLeft={2}>
+            <Text wrap="wrap">
+              {part.content}
+              {isLast && message.isStreaming && <Text color="gray">▌</Text>}
+            </Text>
+          </Box>
+        );
+      } else {
+        return (
+          <ToolCallDisplay key={part.toolCall.id} toolCall={part.toolCall} />
+        );
+      }
+    });
+  };
+
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      <Text bold color={roleColors[message.role]}>
+        {label}
+      </Text>
+      {renderParts()}
     </Box>
   );
 }

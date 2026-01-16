@@ -8,6 +8,7 @@ import {
   SettingsScreen,
   HelpScreen,
   type Message,
+  type MessagePart,
   type ToolCall,
 } from './components/index.js';
 import { loadSettings, type AppSettings } from '../config/index.js';
@@ -130,11 +131,12 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
       setStatus('Thinking...');
 
       const assistantMessageId = crypto.randomUUID();
-      const toolCalls: ToolCall[] = [];
+      const parts: MessagePart[] = [];
+      const toolCallMap = new Map<string, ToolCall>();
 
       setMessages((prev) => [
         ...prev,
-        { id: assistantMessageId, role: 'assistant', content: '', isStreaming: true, toolCalls: [] },
+        { id: assistantMessageId, role: 'assistant', content: '', isStreaming: true, parts: [] },
       ]);
 
       try {
@@ -173,41 +175,50 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
                 const data = JSON.parse(line.slice(6));
 
                 if (data.type === 'TEXT_MESSAGE_CONTENT' && data.delta) {
+                  // Append to last text part or create new one
+                  const lastPart = parts[parts.length - 1];
+                  if (lastPart && lastPart.type === 'text') {
+                    lastPart.content += data.delta;
+                  } else {
+                    parts.push({ type: 'text', content: data.delta });
+                  }
                   setMessages((prev) =>
                     prev.map((msg) =>
                       msg.id === assistantMessageId
-                        ? { ...msg, content: msg.content + data.delta }
+                        ? { ...msg, content: msg.content + data.delta, parts: [...parts] }
                         : msg
                     )
                   );
                 }
 
                 if (data.type === 'TOOL_CALL_START' && data.tool_name) {
+                  const toolCallId = data.tool_call_id || crypto.randomUUID();
                   const newToolCall: ToolCall = {
-                    id: data.tool_call_id || crypto.randomUUID(),
+                    id: toolCallId,
                     name: data.tool_name,
                     status: 'running',
                   };
-                  toolCalls.push(newToolCall);
+                  toolCallMap.set(toolCallId, newToolCall);
+                  parts.push({ type: 'tool_call', toolCall: newToolCall });
                   setStatus(`Running: ${data.tool_name}`);
                   setMessages((prev) =>
                     prev.map((msg) =>
                       msg.id === assistantMessageId
-                        ? { ...msg, toolCalls: [...toolCalls] }
+                        ? { ...msg, parts: [...parts] }
                         : msg
                     )
                   );
                 }
 
                 if (data.type === 'TOOL_CALL_END' && data.tool_call_id) {
-                  const tc = toolCalls.find((t) => t.id === data.tool_call_id);
+                  const tc = toolCallMap.get(data.tool_call_id);
                   if (tc) {
                     tc.status = data.error ? 'error' : 'completed';
                     tc.result = data.error;
                     setMessages((prev) =>
                       prev.map((msg) =>
                         msg.id === assistantMessageId
-                          ? { ...msg, toolCalls: [...toolCalls] }
+                          ? { ...msg, parts: [...parts] }
                           : msg
                       )
                     );
@@ -232,7 +243,7 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
         }
 
         // Mark any remaining running tool calls as completed
-        for (const tc of toolCalls) {
+        for (const tc of toolCallMap.values()) {
           if (tc.status === 'running') {
             tc.status = 'completed';
           }
@@ -241,7 +252,7 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === assistantMessageId
-              ? { ...msg, isStreaming: false, toolCalls: [...toolCalls] }
+              ? { ...msg, isStreaming: false, parts: [...parts] }
               : msg
           )
         );
