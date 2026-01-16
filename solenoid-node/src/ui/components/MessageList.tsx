@@ -1,4 +1,10 @@
 import { Box, Text } from 'ink';
+import type { FC } from 'react';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const MarkdownRaw = require('ink-markdown');
+
+// Type assertion for ink-markdown which has incomplete types
+const Markdown: FC<{ children: string }> = MarkdownRaw.default || MarkdownRaw;
 
 export interface ToolCall {
   id: string;
@@ -67,6 +73,21 @@ function MessageBubble({ message }: { message: Message }) {
 
   const label = message.agentName || roleLabels[message.role];
 
+  // Render text content - raw while streaming, markdown when complete
+  const renderTextContent = (content: string, isStreaming: boolean, showCursor: boolean) => {
+    if (isStreaming) {
+      // Raw text while streaming to avoid markdown parsing overhead
+      return (
+        <Text wrap="wrap">
+          {content}
+          {showCursor && <Text color="gray">▌</Text>}
+        </Text>
+      );
+    }
+    // Render as markdown when complete
+    return <Markdown>{content}</Markdown>;
+  };
+
   // Render interleaved parts if available
   const renderParts = () => {
     if (!message.parts || message.parts.length === 0) {
@@ -74,10 +95,7 @@ function MessageBubble({ message }: { message: Message }) {
       if (!message.content) return null;
       return (
         <Box paddingLeft={2}>
-          <Text wrap="wrap">
-            {message.content}
-            {message.isStreaming && <Text color="gray">▌</Text>}
-          </Text>
+          {renderTextContent(message.content, !!message.isStreaming, !!message.isStreaming)}
         </Box>
       );
     }
@@ -85,12 +103,10 @@ function MessageBubble({ message }: { message: Message }) {
     return message.parts.map((part, index) => {
       if (part.type === 'text') {
         const isLast = index === message.parts!.length - 1;
+        const showCursor = isLast && !!message.isStreaming;
         return (
           <Box key={`text-${index}`} paddingLeft={2}>
-            <Text wrap="wrap">
-              {part.content}
-              {isLast && message.isStreaming && <Text color="gray">▌</Text>}
-            </Text>
+            {renderTextContent(part.content, !!message.isStreaming, showCursor)}
           </Box>
         );
       } else {
