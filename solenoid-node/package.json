@@ -43,6 +43,7 @@
     "@hono/zod-validator": "^0.4.3",
     "@inkjs/ui": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "@pppp606/ink-chart": "^0.2.4",
     "better-sqlite3": "^11.8.1",
     "chalk": "^5.4.1",
     "commander": "^13.1.0",

@@ -168,12 +168,15 @@ app.post('/api/agent', zValidator('json', RunAgentInputSchema), async (c) => {
         }
 
         if (chunk.type === 'tool_call' && chunk.toolCall) {
+          const toolCallId = crypto.randomUUID();
           await stream.writeSSE({
             event: 'tool_call_start',
             data: JSON.stringify({
               type: 'TOOL_CALL_START',
-              tool_call_id: crypto.randomUUID(),
+              tool_call_id: toolCallId,
               tool_name: chunk.toolCall.function.name,
+              // AG-UI protocol: include full arguments for frontend rendering
+              tool_args: chunk.toolCall.function.arguments,
             }),
           });
         }

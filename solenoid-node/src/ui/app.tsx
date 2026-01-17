@@ -208,6 +208,8 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
                     id: toolCallId,
                     name: data.tool_name,
                     status: 'running',
+                    // AG-UI protocol: capture tool args for frontend rendering (charts, etc.)
+                    args: data.tool_args,
                   };
                   toolCallMap.set(toolCallId, newToolCall);
                   parts.push({ type: 'tool_call', toolCall: newToolCall });

@@ -2,17 +2,24 @@
  * Message List Component
  *
  * Renders the chat conversation history with support for streaming responses,
- * tool call indicators, and markdown formatting. Messages display differently
- * based on role (user, assistant, system) with distinct colors and labels.
+ * tool call indicators, markdown formatting, and inline chart rendering.
+ * Messages display differently based on role (user, assistant, system) with
+ * distinct colors and labels.
+ *
+ * AG-UI Protocol Compliance:
+ * - Renders charts inline based on tool call arguments
+ * - Charts appear in the message flow where the tool was called
  *
  * Dependencies:
  * - marked: Markdown parser for formatting completed responses
  * - marked-terminal: Terminal-friendly renderer for markdown output
+ * - ChartRenderer: Inline chart rendering component
  */
 import { Box, Text } from 'ink';
 import { useMemo } from 'react';
 import { marked } from 'marked';
 import TerminalRenderer from 'marked-terminal';
+import { ChartRenderer, isChartToolCall } from './ChartRenderer.js';
 
 // Configure marked with terminal renderer
 marked.setOptions({
@@ -46,6 +53,8 @@ export interface ToolCall {
   name: string;
   status: 'pending' | 'running' | 'completed' | 'error';
   result?: string;
+  /** Tool arguments for AG-UI protocol frontend rendering (e.g., chart data) */
+  args?: Record<string, unknown>;
 }
 
 export type MessagePart =
@@ -80,6 +89,26 @@ function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
     completed: 'green',
     error: 'red',
   } as const;
+
+  // Render charts inline when the tool is render_chart and completed
+  if (isChartToolCall(toolCall.name) && toolCall.args && toolCall.status === 'completed') {
+    return (
+      <Box flexDirection="column" paddingLeft={2}>
+        <ChartRenderer toolArgs={toolCall.args} />
+      </Box>
+    );
+  }
+
+  // Render chart placeholder while running
+  if (isChartToolCall(toolCall.name) && toolCall.status === 'running') {
+    return (
+      <Box paddingLeft={4} marginY={0}>
+        <Text color="yellow">
+          {statusIcons[toolCall.status]} Generating chart...
+        </Text>
+      </Box>
+    );
+  }
 
   return (
     <Box paddingLeft={4} marginY={0}>
