@@ -1,3 +1,10 @@
+/**
+ * Settings Screen Component
+ *
+ * Overlay screen displaying current configuration from app_settings.yaml.
+ * Shows model settings, embedding configuration, MCP servers, and
+ * per-agent model overrides. Closes on Enter or Escape key press.
+ */
 import { Box, Text, useInput } from 'ink';
 import type { AppSettings } from '../../config/schema.js';
 

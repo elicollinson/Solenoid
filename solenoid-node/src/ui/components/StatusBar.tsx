@@ -1,3 +1,13 @@
+/**
+ * Status Bar Component
+ *
+ * Bottom bar showing current status, server connection URL, and exit hint.
+ * Displays a spinner with status message when loading, otherwise shows
+ * a static ready message.
+ *
+ * Dependencies:
+ * - @inkjs/ui: Provides the Spinner component for loading indication
+ */
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 

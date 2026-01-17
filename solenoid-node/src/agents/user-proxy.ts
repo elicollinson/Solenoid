@@ -1,3 +1,17 @@
+/**
+ * User Proxy Agent
+ *
+ * Gateway agent that serves as the first and last point of contact for user
+ * interactions. Delegates all work to the prime_agent and performs quality
+ * verification before delivering responses. Captures the original user query
+ * for context tracking throughout the agent chain.
+ *
+ * Quality Gates:
+ * - Verifies requested item counts are correct
+ * - Ensures all parts of multi-part requests are addressed
+ * - Confirms actions were performed, not just described
+ * - Checks that requested data/numbers are present
+ */
 import { BaseAgent } from './base-agent.js';
 import type { Agent, AgentContext, AgentRequest } from './types.js';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';

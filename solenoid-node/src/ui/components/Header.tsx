@@ -1,3 +1,9 @@
+/**
+ * Header Component
+ *
+ * Application header displaying the title and version number. Uses a
+ * rounded border with cyan styling for visual distinction.
+ */
 import { Box, Text } from 'ink';
 
 interface HeaderProps {

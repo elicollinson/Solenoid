@@ -1,3 +1,16 @@
+/**
+ * MCP Manager
+ *
+ * Manages connections to Model Context Protocol (MCP) servers. Handles
+ * server discovery from configuration, connection establishment (stdio or HTTP),
+ * tool discovery, and tool invocation. Supports multiple concurrent server
+ * connections with namespaced tool names.
+ *
+ * Dependencies:
+ * - @modelcontextprotocol/sdk: Official MCP client SDK for server communication
+ *   - StdioClientTransport: Connects to MCP servers via subprocess stdio
+ *   - StreamableHTTPClientTransport: Connects to MCP servers via HTTP
+ */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';

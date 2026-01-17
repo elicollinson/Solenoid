@@ -1,3 +1,15 @@
+/**
+ * Memory Database Schema
+ *
+ * SQLite schema and TypeScript interfaces for the memory system. Defines
+ * three memory types (profile, episodic, semantic) with support for both
+ * keyword search (FTS5) and vector similarity search (sqlite-vec).
+ *
+ * Tables:
+ * - memories: Main storage for memory entries with metadata
+ * - memories_fts: FTS5 virtual table for BM25 keyword search
+ * - memories_vec: sqlite-vec virtual table for dense vector search
+ */
 export const MEMORY_SCHEMA = `
 -- Main memories table
 CREATE TABLE IF NOT EXISTS memories (

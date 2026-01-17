@@ -1,3 +1,10 @@
+/**
+ * Agent Type Definitions
+ *
+ * Core TypeScript interfaces and types for the multi-agent system. Defines
+ * the contract for agents, their configuration, request/response structures,
+ * and lifecycle callbacks. All agent implementations conform to these types.
+ */
 import type { Message, ToolDefinition, ToolCall } from '../llm/types.js';
 
 export interface AgentContext {

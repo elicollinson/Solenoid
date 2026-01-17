@@ -1,3 +1,19 @@
+/**
+ * Code Executor Agent
+ *
+ * Python execution specialist running in a secure WebAssembly sandbox.
+ * Handles computational tasks, calculations, algorithms, and data processing.
+ * Uses Pyodide for in-browser Python execution with access to standard library.
+ *
+ * Environment:
+ * - Python standard library (math, json, datetime, collections, etc.)
+ * - Pygal charting library
+ * - No network access or external dependencies (numpy, pandas, etc.)
+ * - Output captured via stdout (print statements)
+ *
+ * Dependencies:
+ * - pyodide: WebAssembly Python runtime for secure sandboxed execution
+ */
 import { BaseAgent } from './base-agent.js';
 import type { Agent } from './types.js';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';

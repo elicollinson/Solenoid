@@ -1,3 +1,13 @@
+/**
+ * Logging Utilities
+ *
+ * Structured JSON logging using Pino with file-based output. Creates separate
+ * log files for server, UI, and agent components in the ./logs directory.
+ * Includes global error handlers for uncaught exceptions and rejections.
+ *
+ * Dependencies:
+ * - pino: High-performance JSON logger with async file writing
+ */
 import pino from 'pino';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';

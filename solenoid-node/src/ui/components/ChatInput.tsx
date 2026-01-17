@@ -1,3 +1,13 @@
+/**
+ * Chat Input Component
+ *
+ * Text input field for user messages with visual feedback for disabled state.
+ * Clears input after submission by cycling the React key. Styled with a
+ * rounded border that changes color based on state.
+ *
+ * Dependencies:
+ * - @inkjs/ui: UI component library for Ink (TextInput)
+ */
 import { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { TextInput } from '@inkjs/ui';

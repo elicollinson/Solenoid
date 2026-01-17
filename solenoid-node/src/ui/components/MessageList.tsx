@@ -1,3 +1,14 @@
+/**
+ * Message List Component
+ *
+ * Renders the chat conversation history with support for streaming responses,
+ * tool call indicators, and markdown formatting. Messages display differently
+ * based on role (user, assistant, system) with distinct colors and labels.
+ *
+ * Dependencies:
+ * - marked: Markdown parser for formatting completed responses
+ * - marked-terminal: Terminal-friendly renderer for markdown output
+ */
 import { Box, Text } from 'ink';
 import { useMemo } from 'react';
 import { marked } from 'marked';

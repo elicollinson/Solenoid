@@ -1,3 +1,10 @@
+/**
+ * LLM Type Definitions
+ *
+ * Core interfaces for LLM interactions including messages, tool calls, and
+ * provider contracts. Defines the abstraction layer that allows swapping
+ * between different LLM backends (Ollama, OpenAI, Anthropic).
+ */
 import type { Tool as OllamaTool } from 'ollama';
 
 export interface Message {

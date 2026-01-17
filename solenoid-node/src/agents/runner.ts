@@ -1,3 +1,15 @@
+/**
+ * Agent Runner
+ *
+ * Session manager that orchestrates agent execution. Maintains conversation
+ * history per session, transforms user input into agent requests, and streams
+ * responses back. Acts as the interface between the server API and the agent system.
+ *
+ * Features:
+ * - Session-based conversation tracking with unique session IDs
+ * - Persistent message history within sessions
+ * - Async generator interface for response streaming
+ */
 import type { Agent, AgentContext, AgentRequest, AgentStreamChunk } from './types.js';
 
 interface Session {

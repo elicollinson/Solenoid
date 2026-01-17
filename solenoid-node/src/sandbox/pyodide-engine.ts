@@ -1,3 +1,15 @@
+/**
+ * Python Sandbox (Pyodide Engine)
+ *
+ * Secure Python execution environment using WebAssembly. Runs Python code
+ * in an isolated sandbox with captured stdout/stderr and virtual filesystem
+ * for file I/O. Preloads micropip and pygal for package management and charting.
+ *
+ * Dependencies:
+ * - pyodide: CPython compiled to WebAssembly for in-browser/in-Node Python
+ *   - micropip: Package installer for pure-Python wheels
+ *   - pygal: SVG charting library (pre-installed)
+ */
 import type { PyodideInterface } from 'pyodide';
 
 export interface ExecutionResult {
