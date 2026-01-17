@@ -1,3 +1,13 @@
+/**
+ * Ollama LLM Provider
+ *
+ * LLM provider implementation for Ollama. Handles chat completions with
+ * support for streaming, tool calls, and system prompts. Connects to a
+ * local Ollama instance (default: localhost:11434).
+ *
+ * Dependencies:
+ * - ollama: Official Ollama JavaScript client for local LLM inference
+ */
 import { Ollama } from 'ollama';
 import type {
   ChatOptions,

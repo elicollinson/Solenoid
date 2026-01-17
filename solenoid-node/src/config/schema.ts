@@ -1,3 +1,13 @@
+/**
+ * Configuration Schema
+ *
+ * Zod validation schemas for app_settings.yaml. Defines the structure and
+ * validation rules for all configuration sections including models, embeddings,
+ * search providers, MCP servers, and custom agent prompts.
+ *
+ * Dependencies:
+ * - zod: TypeScript-first schema validation with static type inference
+ */
 import { z } from 'zod';
 
 export const EmbeddingsConfigSchema = z.object({

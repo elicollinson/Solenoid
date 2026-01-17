@@ -1,3 +1,10 @@
+/**
+ * Settings Screen Component
+ *
+ * Overlay screen displaying current configuration from app_settings.yaml.
+ * Shows model settings, embedding configuration, MCP servers, and
+ * per-agent model overrides. Closes on Enter or Escape key press.
+ */
 import { useState, useCallback, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { TextInput } from '@inkjs/ui';

@@ -1,4 +1,15 @@
 #!/usr/bin/env node
+/**
+ * CLI Entry Point
+ *
+ * Main command-line interface for Solenoid. Provides three commands:
+ * - `serve`: Starts only the API server
+ * - `ui`: Starts only the terminal UI (requires server running separately)
+ * - `start` (default): Starts both server and UI together
+ *
+ * Dependencies:
+ * - commander: Declarative CLI argument parsing and command definitions
+ */
 import { program } from 'commander';
 import { startServer } from './server/index.js';
 

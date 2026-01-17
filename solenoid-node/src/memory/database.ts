@@ -1,3 +1,13 @@
+/**
+ * Memory Database
+ *
+ * SQLite database initialization with WAL mode for performance. Loads the
+ * memory schema and optionally the sqlite-vec extension for vector search.
+ * Falls back gracefully if vector extension is unavailable.
+ *
+ * Dependencies:
+ * - better-sqlite3: Synchronous SQLite3 binding for Node.js with native performance
+ */
 import Database from 'better-sqlite3';
 import { MEMORY_SCHEMA } from './schema.js';
 

@@ -1,3 +1,10 @@
+/**
+ * Brave Search Tool
+ *
+ * Web search integration using the Brave Search API. Returns titles, URLs,
+ * and snippets for search queries. API key can be set via environment variable
+ * (BRAVE_SEARCH_API_KEY) or in app_settings.yaml.
+ */
 import { loadSettings } from '../config/index.js';
 import type { ToolDefinition } from '../llm/types.js';
 

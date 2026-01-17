@@ -1,3 +1,10 @@
+/**
+ * Web Reader Tool
+ *
+ * Fetches and extracts text content from web pages. Strips HTML tags,
+ * decodes entities, and cleans whitespace. Truncates content to 10,000
+ * characters to stay within LLM context limits.
+ */
 import type { ToolDefinition } from '../llm/types.js';
 
 const MAX_CONTENT_LENGTH = 10000;

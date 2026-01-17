@@ -1,3 +1,14 @@
+
+/**
+ * Settings Loader
+ *
+ * Loads and caches application configuration from app_settings.yaml. Searches
+ * for the config file starting from the current directory up to root. Provides
+ * helper functions to get model configs and agent prompts with fallback defaults.
+ *
+ * Dependencies:
+ * - yaml: YAML parser for reading configuration files
+ */
 import { readFileSync, writeFileSync, existsSync, copyFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';

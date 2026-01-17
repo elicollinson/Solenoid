@@ -1,3 +1,19 @@
+/**
+ * MCP Agent
+ *
+ * External tool integration specialist using Model Context Protocol (MCP).
+ * Connects to configured MCP servers to access documentation, file systems,
+ * and other external capabilities. Tools are dynamically discovered from
+ * connected servers.
+ *
+ * Common use cases:
+ * - Documentation lookup (resolve-library-id, query-docs)
+ * - File operations (read_file, write_file, list_directory)
+ * - Custom integrations defined in app_settings.yaml
+ *
+ * Dependencies:
+ * - @modelcontextprotocol/sdk: Official MCP client implementation
+ */
 import { BaseAgent } from './base-agent.js';
 import type { Agent } from './types.js';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';

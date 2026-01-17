@@ -1,3 +1,15 @@
+/**
+ * Memory Service
+ *
+ * High-level API for memory storage and retrieval. Coordinates database
+ * operations, embedding generation, and hybrid search. Manages the lifecycle
+ * of memory entries including creation, search, and deletion.
+ *
+ * Memory types:
+ * - profile: User preferences and persistent facts
+ * - episodic: Conversation history and interactions
+ * - semantic: Extracted knowledge and learned concepts
+ */
 import type Database from 'better-sqlite3';
 import { createDatabase, closeDatabase } from './database.js';
 import { EmbeddingsService, getEmbeddingsService } from './embeddings.js';

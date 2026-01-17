@@ -1,3 +1,10 @@
+/**
+ * Memory Callbacks
+ *
+ * Agent lifecycle callbacks for memory integration. Injects relevant memories
+ * into agent context before model calls and saves conversation exchanges as
+ * episodic memories after responses. Enables agents to recall past interactions.
+ */
 import type { AgentRequest } from '../agents/types.js';
 import type { Message } from '../llm/types.js';
 import { getMemoryService, type MemoryService } from './service.js';
