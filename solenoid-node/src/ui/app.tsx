@@ -11,7 +11,7 @@ import {
   type MessagePart,
   type ToolCall,
 } from './components/index.js';
-import { loadSettings, type AppSettings } from '../config/index.js';
+import { loadSettings } from '../config/index.js';
 import { uiLogger } from '../utils/logger.js';
 
 type Screen = 'chat' | 'settings' | 'help';
@@ -26,14 +26,12 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState('Ready');
   const [screen, setScreen] = useState<Screen>('chat');
-  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [threadId] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     uiLogger.debug('App useEffect: loading settings');
     try {
-      const loaded = loadSettings();
-      setSettings(loaded);
+      loadSettings();
       uiLogger.info('Settings loaded successfully');
     } catch (error) {
       uiLogger.warn({ error }, 'Settings not available');
@@ -274,7 +272,7 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
   );
 
   if (screen === 'settings') {
-    return <SettingsScreen settings={settings} onClose={() => setScreen('chat')} />;
+    return <SettingsScreen onClose={() => setScreen('chat')} />;
   }
 
   if (screen === 'help') {
