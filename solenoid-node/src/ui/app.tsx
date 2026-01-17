@@ -10,7 +10,7 @@ import {
   type Message,
   type ToolCall,
 } from './components/index.js';
-import { loadSettings, type AppSettings } from '../config/index.js';
+import { loadSettings, clearSettingsCache } from '../config/index.js';
 import { uiLogger } from '../utils/logger.js';
 
 type Screen = 'chat' | 'settings' | 'help';
@@ -25,13 +25,22 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState('Ready');
   const [screen, setScreen] = useState<Screen>('chat');
-  const [settings, setSettings] = useState<AppSettings | null>(null);
+
+  const reloadSettings = useCallback(() => {
+    uiLogger.debug('Reloading settings');
+    try {
+      clearSettingsCache();
+      loadSettings(); // Reload to validate settings exist
+      uiLogger.info('Settings reloaded successfully');
+    } catch (error) {
+      uiLogger.warn({ error }, 'Settings not available');
+    }
+  }, []);
 
   useEffect(() => {
     uiLogger.debug('App useEffect: loading settings');
     try {
-      const loaded = loadSettings();
-      setSettings(loaded);
+      loadSettings();
       uiLogger.info('Settings loaded successfully');
     } catch (error) {
       uiLogger.warn({ error }, 'Settings not available');
@@ -261,7 +270,12 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
   );
 
   if (screen === 'settings') {
-    return <SettingsScreen settings={settings} onClose={() => setScreen('chat')} />;
+    return (
+      <SettingsScreen
+        onClose={() => setScreen('chat')}
+        onSettingsChanged={reloadSettings}
+      />
+    );
   }
 
   if (screen === 'help') {
