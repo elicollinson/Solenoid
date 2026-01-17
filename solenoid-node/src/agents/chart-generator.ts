@@ -1,3 +1,22 @@
+/**
+ * Chart Generator Agent
+ *
+ * Data visualization specialist using Pygal in a WebAssembly sandbox.
+ * Creates SVG charts for various data types including bar, line, pie,
+ * scatter, and radar charts. Output is saved to chart.svg in the sandbox.
+ *
+ * Supported chart types:
+ * - Bar/HorizontalBar: Categories with values
+ * - Line: Trends over time
+ * - Pie/Donut: Parts of a whole
+ * - XY: Scatter/correlation data
+ * - Histogram: Distributions
+ * - Radar: Multi-category comparisons
+ * - StackedBar/StackedLine: Stacked comparisons
+ *
+ * Dependencies:
+ * - pygal: Python SVG charting library (runs in Pyodide sandbox)
+ */
 import { BaseAgent } from './base-agent.js';
 import type { Agent } from './types.js';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';

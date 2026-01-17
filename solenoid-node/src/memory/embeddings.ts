@@ -1,3 +1,13 @@
+/**
+ * Embeddings Service
+ *
+ * Generates text embeddings using Ollama for semantic memory search.
+ * Uses asymmetric embedding with different prefixes for documents vs queries.
+ * Normalizes and crops vectors to 256 dimensions for storage efficiency.
+ *
+ * Dependencies:
+ * - ollama: Ollama client for local embedding model inference (nomic-embed-text)
+ */
 import { Ollama } from 'ollama';
 
 export class EmbeddingsService {

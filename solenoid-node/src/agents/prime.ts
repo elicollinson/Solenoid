@@ -1,3 +1,19 @@
+/**
+ * Prime Agent (Router)
+ *
+ * Intelligent router that decides whether to answer directly from knowledge
+ * or delegate to the planning system. Simple factual questions are answered
+ * immediately; tasks requiring tools, research, or multi-step execution are
+ * forwarded to the planning_agent.
+ *
+ * Delegation triggers:
+ * - Code execution, calculations, or algorithm generation
+ * - Chart/visualization creation
+ * - Current/live data from web searches
+ * - Research requiring sources and citations
+ * - File operations via MCP
+ * - Multi-step composite tasks
+ */
 import { BaseAgent } from './base-agent.js';
 import type { Agent } from './types.js';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';

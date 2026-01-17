@@ -1,3 +1,9 @@
+/**
+ * Help Screen Component
+ *
+ * Overlay screen displaying available commands, keyboard shortcuts, and
+ * agent descriptions. Closes on Enter or Escape key press.
+ */
 import { Box, Text, useInput } from 'ink';
 
 interface HelpScreenProps {

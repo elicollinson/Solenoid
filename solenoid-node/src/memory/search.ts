@@ -1,3 +1,15 @@
+/**
+ * Hybrid Memory Search
+ *
+ * Implements hybrid retrieval combining dense vector search (semantic similarity)
+ * and sparse BM25 search (keyword matching). Uses Reciprocal Rank Fusion (RRF)
+ * to merge results from both retrieval methods for improved accuracy.
+ *
+ * Algorithm:
+ * 1. Dense search via sqlite-vec for semantic similarity
+ * 2. Sparse search via FTS5 for keyword matching
+ * 3. RRF fusion to combine and re-rank results
+ */
 import type Database from 'better-sqlite3';
 import type { MemoryRow, SearchResult } from './schema.js';
 import type { EmbeddingsService } from './embeddings.js';

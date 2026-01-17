@@ -1,3 +1,16 @@
+/**
+ * Base Agent Implementation
+ *
+ * Core agent class that all specialized agents extend. Handles LLM communication,
+ * streaming responses, tool call detection, and sub-agent transfers. Implements
+ * the agentic loop: receive input → call LLM → handle tool calls/transfers → yield output.
+ *
+ * Key features:
+ * - Async generator pattern for streaming responses
+ * - Before/after model callbacks for request manipulation and memory storage
+ * - Dynamic tool building including transfer tools for sub-agents
+ * - Support for both static and context-aware instruction prompts
+ */
 import type {
   Agent,
   AgentConfig,

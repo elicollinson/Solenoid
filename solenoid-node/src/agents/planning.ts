@@ -1,3 +1,18 @@
+/**
+ * Planning Agent (Orchestrator)
+ *
+ * Chief coordinator that orchestrates multi-step tasks by delegating to
+ * specialist agents. Has no direct tool access - can only delegate work.
+ * Creates explicit plans before execution and handles failures by trying
+ * alternative agents.
+ *
+ * Specialist team:
+ * - research_agent: Web search, current data, news
+ * - code_executor_agent: Math, calculations, data processing
+ * - chart_generator_agent: Pygal visualizations
+ * - mcp_agent: Documentation lookup, file operations
+ * - generic_executor_agent: Writing, summaries, general text tasks
+ */
 import { BaseAgent } from './base-agent.js';
 import type { Agent } from './types.js';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';

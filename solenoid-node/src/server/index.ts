@@ -1,3 +1,20 @@
+/**
+ * API Server
+ *
+ * HTTP server exposing the agent system via REST API with SSE streaming.
+ * Provides endpoints for health checks, configuration, and agent interaction.
+ * Streams agent responses in real-time using Server-Sent Events.
+ *
+ * Endpoints:
+ * - GET /health: Server health check
+ * - GET /config: Current configuration summary
+ * - POST /api/agent: Run agent with SSE streaming response
+ *
+ * Dependencies:
+ * - hono: Lightweight web framework for edge/Node.js
+ * - @hono/node-server: Node.js adapter for Hono
+ * - @hono/zod-validator: Request validation using Zod schemas
+ */
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';

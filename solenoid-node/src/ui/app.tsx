@@ -1,3 +1,16 @@
+/**
+ * Main App Component
+ *
+ * Root React component for the terminal UI. Manages chat state, screen navigation,
+ * and SSE streaming from the API server. Handles slash commands (/help, /settings,
+ * /clear, /agents, /quit) and keyboard shortcuts (Ctrl+C to quit).
+ *
+ * Dependencies:
+ * - ink: React-based terminal UI framework
+ *   - Box: Flexbox layout container
+ *   - useApp: Application lifecycle hooks
+ *   - useInput: Keyboard input handling
+ */
 import { useState, useCallback, useEffect } from 'react';
 import { Box, useApp, useInput } from 'ink';
 import {

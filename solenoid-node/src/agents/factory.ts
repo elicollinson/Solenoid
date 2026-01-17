@@ -1,3 +1,17 @@
+/**
+ * Agent Factory
+ *
+ * Creates and wires up the complete agent hierarchy. Establishes the delegation
+ * chain: UserProxy → Prime → Planning → Specialists (Research, Code, Chart, MCP, Generic).
+ *
+ * Agent Hierarchy:
+ * - user_proxy_agent: Entry point, quality gates responses before delivery
+ * - prime_agent: Routes simple queries vs complex tasks needing delegation
+ * - planning_agent: Orchestrates multi-step tasks across specialist agents
+ * - Specialists: Domain-specific agents (research, code execution, charts, MCP tools, general text)
+ *
+ * Provides both async (with MCP) and sync (without MCP) initialization variants.
+ */
 import type { Agent } from './types.js';
 import { AgentRunner } from './runner.js';
 import { createUserProxyAgent } from './user-proxy.js';

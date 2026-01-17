@@ -1,3 +1,15 @@
+/**
+ * Research Agent
+ *
+ * Web research specialist that gathers information from the internet.
+ * Uses Brave Search API for discovery and fetches full page content
+ * for detailed analysis. Produces structured research reports with
+ * source citations.
+ *
+ * Tools:
+ * - universal_search: Brave Search API for web queries
+ * - read_webpage: Fetches and extracts text from URLs
+ */
 import { BaseAgent } from './base-agent.js';
 import type { Agent } from './types.js';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';

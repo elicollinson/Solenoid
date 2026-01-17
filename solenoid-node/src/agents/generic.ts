@@ -1,3 +1,16 @@
+/**
+ * Generic Executor Agent
+ *
+ * General-purpose text worker for knowledge-based tasks that don't require
+ * specialized tools. Handles content creation, summarization, analysis,
+ * and general knowledge questions. Has no external tool access.
+ *
+ * Capabilities:
+ * - Answer general knowledge questions
+ * - Write creative content (emails, documents, stories)
+ * - Summarize and analyze provided text
+ * - Generate structured content (lists, outlines, comparisons)
+ */
 import { BaseAgent } from './base-agent.js';
 import type { Agent } from './types.js';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
