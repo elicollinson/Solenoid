@@ -1,26 +1,33 @@
 import { Box, Text } from 'ink';
-import { useState, useEffect, type FC, type ReactElement } from 'react';
+import { useMemo } from 'react';
+import { marked } from 'marked';
+import TerminalRenderer from 'marked-terminal';
 
-// Lazy-load markdown component to avoid ESM/CJS issues
-let MarkdownComponent: FC<{ children: string }> | null = null;
+// Configure marked with terminal renderer
+marked.setOptions({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  renderer: new TerminalRenderer({
+    reflowText: true,
+    width: 80,
+  }) as any,
+});
 
-function Markdown({ children }: { children: string }): ReactElement {
-  const [Md, setMd] = useState<FC<{ children: string }> | null>(MarkdownComponent);
-
-  useEffect(() => {
-    if (!MarkdownComponent) {
-      import('ink-markdown').then((mod) => {
-        MarkdownComponent = mod.default as unknown as FC<{ children: string }>;
-        setMd(() => MarkdownComponent);
-      });
+function renderMarkdown(content: string): string {
+  try {
+    const rendered = marked.parse(content);
+    // marked.parse can return string or Promise<string>, we only use sync
+    if (typeof rendered === 'string') {
+      return rendered.trim();
     }
-  }, []);
-
-  if (!Md) {
-    return <Text>{children}</Text>;
+    return content;
+  } catch {
+    return content;
   }
+}
 
-  return <Md>{children}</Md>;
+function Markdown({ children }: { children: string }) {
+  const rendered = useMemo(() => renderMarkdown(children), [children]);
+  return <Text>{rendered}</Text>;
 }
 
 export interface ToolCall {
@@ -92,7 +99,7 @@ function MessageBubble({ message }: { message: Message }) {
 
   // Render text content - raw while streaming, markdown when complete
   const renderTextContent = (content: string, isStreaming: boolean, showCursor: boolean) => {
-    if (isStreaming) {
+    if (isStreaming || !content) {
       // Raw text while streaming to avoid markdown parsing overhead
       return (
         <Text wrap="wrap">
