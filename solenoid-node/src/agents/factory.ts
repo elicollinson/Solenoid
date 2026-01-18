@@ -17,6 +17,9 @@
  */
 import type { LlmAgent } from '@google/adk';
 import { InMemoryRunner } from '@google/adk';
+
+// Register OllamaLlm with ADK's LLMRegistry (side-effect import)
+import '../llm/ollama-adk.js';
 import { AgentRunner, runner, runAgent, createRunner } from './runner.js';
 import { rootAgent, userProxyAgent, createUserProxyAgent } from './user-proxy.js';
 import { primeAgent } from './prime.js';
