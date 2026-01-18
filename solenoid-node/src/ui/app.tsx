@@ -202,16 +202,17 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
                   );
                 }
 
-                if (data.type === 'TOOL_CALL_START' && data.tool_name) {
-                  const toolCallId = data.tool_call_id || crypto.randomUUID();
+                // AG-UI: TOOL_CALL_START event
+                if (data.type === 'TOOL_CALL_START' && data.toolName) {
+                  const toolCallId = data.toolCallId || crypto.randomUUID();
                   const newToolCall: ToolCall = {
                     id: toolCallId,
-                    name: data.tool_name,
+                    name: data.toolName,
                     status: 'running',
                   };
                   toolCallMap.set(toolCallId, newToolCall);
                   parts.push({ type: 'tool_call', toolCall: newToolCall });
-                  setStatus(`Running: ${data.tool_name}`);
+                  setStatus(`Running: ${data.toolName}`);
                   setMessages((prev) =>
                     prev.map((msg) =>
                       msg.id === assistantMessageId
@@ -221,11 +222,17 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
                   );
                 }
 
-                if (data.type === 'TOOL_CALL_END' && data.tool_call_id) {
-                  const tc = toolCallMap.get(data.tool_call_id);
-                  if (tc) {
-                    tc.status = data.error ? 'error' : 'completed';
-                    tc.result = data.error;
+                // AG-UI: TOOL_CALL_ARGS event - capture arguments for frontend rendering
+                if (data.type === 'TOOL_CALL_ARGS' && data.toolCallId) {
+                  const tc = toolCallMap.get(data.toolCallId);
+                  if (tc && data.delta) {
+                    // Parse the arguments JSON string
+                    try {
+                      tc.args = JSON.parse(data.delta);
+                    } catch {
+                      // If not valid JSON, store as-is (might be partial)
+                      tc.args = { raw: data.delta };
+                    }
                     setMessages((prev) =>
                       prev.map((msg) =>
                         msg.id === assistantMessageId
@@ -236,12 +243,28 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
                   }
                 }
 
-                if (data.type === 'AGENT_TRANSFER' && data.to_agent) {
-                  setStatus(`Agent: ${data.to_agent}`);
+                // AG-UI: TOOL_CALL_END event
+                if (data.type === 'TOOL_CALL_END' && data.toolCallId) {
+                  const tc = toolCallMap.get(data.toolCallId);
+                  if (tc) {
+                    tc.status = 'completed';
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === assistantMessageId
+                          ? { ...msg, parts: [...parts] }
+                          : msg
+                      )
+                    );
+                  }
+                }
+
+                // AG-UI: CUSTOM event for agent transfers
+                if (data.type === 'CUSTOM' && data.name === 'agent_transfer' && data.value?.to_agent) {
+                  setStatus(`Agent: ${data.value.to_agent}`);
                   setMessages((prev) =>
                     prev.map((msg) =>
                       msg.id === assistantMessageId
-                        ? { ...msg, agentName: data.to_agent }
+                        ? { ...msg, agentName: data.value.to_agent }
                         : msg
                     )
                   );
