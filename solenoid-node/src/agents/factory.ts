@@ -21,9 +21,7 @@ import { InMemoryRunner } from '@google/adk';
 // Register OllamaLlm with ADK's LLMRegistry (side-effect import)
 import '../llm/ollama-adk.js';
 import { AgentRunner, runner, runAgent, createRunner } from './runner.js';
-import { rootAgent, userProxyAgent, createUserProxyAgent } from './user-proxy.js';
-import { primeAgent } from './prime.js';
-import { planningAgent } from './planning.js';
+import { createPlanningAgent, planningAgent, rootAgent } from './planning.js';
 import { researchAgent } from './research.js';
 import { genericAgent } from './generic.js';
 import { codeExecutorAgent } from './code-executor.js';
@@ -33,8 +31,6 @@ import { mcpAgent } from './mcp.js';
 // Re-export all agents for easy access
 export {
   rootAgent,
-  userProxyAgent,
-  primeAgent,
   planningAgent,
   researchAgent,
   genericAgent,
@@ -69,7 +65,7 @@ export interface AdkAgentHierarchy {
  * @returns AgentHierarchy with rootAgent and legacy AgentRunner
  */
 export async function createAgentHierarchy(): Promise<AgentHierarchy> {
-  const initializedRootAgent = await createUserProxyAgent();
+  const initializedRootAgent = await createPlanningAgent();
   const agentRunner = new AgentRunner(initializedRootAgent);
 
   return {
@@ -84,7 +80,7 @@ export async function createAgentHierarchy(): Promise<AgentHierarchy> {
  * @returns AdkAgentHierarchy with rootAgent and ADK InMemoryRunner
  */
 export async function createAdkAgentHierarchy(): Promise<AdkAgentHierarchy> {
-  const initializedRootAgent = await createUserProxyAgent();
+  const initializedRootAgent = await createPlanningAgent();
   const adkRunner = new InMemoryRunner({
     agent: initializedRootAgent,
     appName: 'Solenoid',

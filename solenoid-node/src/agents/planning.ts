@@ -161,3 +161,5 @@ export async function createPlanningAgent(
     subAgents,
   });
 }
+
+export const rootAgent = planningAgent;
