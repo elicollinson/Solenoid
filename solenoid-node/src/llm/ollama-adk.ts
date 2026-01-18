@@ -26,6 +26,7 @@ import type {
   ToolCall as OllamaToolCall,
 } from 'ollama';
 import type { BaseTool } from '@google/adk';
+import { getOllamaHost } from '../config/settings.js';
 
 /**
  * Ollama LLM implementation for Google ADK.
@@ -55,8 +56,8 @@ export class OllamaLlm extends BaseLlm {
     // Strip 'ollama/' prefix for actual Ollama API calls
     this.actualModel = model.replace(/^ollama\//, '');
 
-    // Initialize Ollama client
-    const host = process.env.OLLAMA_HOST ?? 'http://localhost:11434';
+    // Initialize Ollama client with host from config or env
+    const host = getOllamaHost();
     this.client = new Ollama({ host });
   }
 
@@ -74,43 +75,83 @@ export class OllamaLlm extends BaseLlm {
     llmRequest: LlmRequest,
     stream = false
   ): AsyncGenerator<LlmResponse, void> {
-    // Convert ADK Content[] to Ollama Message[]
-    const messages = this.convertContents(llmRequest.contents);
+    try {
+      // Convert ADK Content[] to Ollama Message[]
+      const messages = this.convertContents(llmRequest.contents);
 
-    // Convert ADK tools to Ollama format
-    const tools = this.convertTools(llmRequest.toolsDict);
+      // Convert ADK tools to Ollama format
+      const tools = this.convertTools(llmRequest.toolsDict);
 
-    // Extract system instruction from config
-    const systemInstruction = llmRequest.config?.systemInstruction;
-    if (systemInstruction) {
-      const systemContent = this.extractTextFromContent(systemInstruction);
-      if (systemContent) {
-        messages.unshift({ role: 'system', content: systemContent });
+      // Extract system instruction from config
+      const systemInstruction = llmRequest.config?.systemInstruction;
+      if (systemInstruction) {
+        const systemContent = this.extractTextFromContent(systemInstruction);
+        if (systemContent) {
+          messages.unshift({ role: 'system', content: systemContent });
+        }
       }
-    }
 
-    if (stream) {
-      // Streaming mode
-      const response = await this.client.chat({
-        model: this.actualModel,
-        messages,
-        tools: tools.length > 0 ? tools : undefined,
-        stream: true,
-      });
+      console.log(`[OllamaLlm] Calling model: ${this.actualModel}, messages: ${messages.length}, tools: ${tools.length}, stream: ${stream}`);
+      console.log(`[OllamaLlm] Available tools: ${tools.map((t) => t.function.name).join(', ') || 'none'}`);
 
-      for await (const chunk of response) {
-        yield this.convertToLlmResponse(chunk, !chunk.done);
+      if (stream) {
+        // Streaming mode
+        const response = await this.client.chat({
+          model: this.actualModel,
+          messages,
+          tools: tools.length > 0 ? tools : undefined,
+          stream: true,
+        });
+
+        for await (const chunk of response) {
+          yield this.convertToLlmResponse(chunk, !chunk.done);
+        }
+      } else {
+        // Non-streaming mode
+        const response = await this.client.chat({
+          model: this.actualModel,
+          messages,
+          tools: tools.length > 0 ? tools : undefined,
+          stream: false,
+        });
+
+        const toolCallCount = response.message.tool_calls?.length ?? 0;
+        console.log(`[OllamaLlm] Response received, done: ${response.done}, content length: ${response.message.content?.length ?? 0}, tool_calls: ${toolCallCount}`);
+        if (response.message.tool_calls && response.message.tool_calls.length > 0) {
+          for (const tc of response.message.tool_calls) {
+            console.log(`[OllamaLlm] Tool call from Ollama: ${tc.function.name}`);
+            console.log(`[OllamaLlm] Tool call args type: ${typeof tc.function.arguments}`);
+            console.log(`[OllamaLlm] Tool call args keys: ${Object.keys(tc.function.arguments || {}).join(', ')}`);
+            console.log(`[OllamaLlm] Tool call args full: ${JSON.stringify(tc.function.arguments)}`);
+          }
+        }
+        const llmResponse = this.convertToLlmResponse(response, false);
+        console.log(`[OllamaLlm] Yielding response with ${llmResponse.content?.parts?.length} parts, turnComplete: ${llmResponse.turnComplete}`);
+        // Log the parts in the response
+        if (llmResponse.content?.parts) {
+          for (const part of llmResponse.content.parts) {
+            if ('text' in part && part.text) {
+              console.log(`[OllamaLlm] Part: text (${part.text.length} chars)`);
+            }
+            if ('functionCall' in part && part.functionCall) {
+              console.log(`[OllamaLlm] Part: functionCall: ${part.functionCall.name}, args: ${JSON.stringify(part.functionCall.args)}`);
+            }
+          }
+        }
+        yield llmResponse;
       }
-    } else {
-      // Non-streaming mode
-      const response = await this.client.chat({
-        model: this.actualModel,
-        messages,
-        tools: tools.length > 0 ? tools : undefined,
-        stream: false,
-      });
-
-      yield this.convertToLlmResponse(response, false);
+    } catch (error) {
+      console.error(`[OllamaLlm] Error calling Ollama:`, error);
+      // Yield an error response so ADK can handle it
+      yield {
+        content: {
+          role: 'model',
+          parts: [{ text: `Error calling Ollama: ${error instanceof Error ? error.message : String(error)}` }],
+        },
+        errorCode: 'OLLAMA_ERROR',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        turnComplete: true,
+      };
     }
   }
 
@@ -284,17 +325,22 @@ export class OllamaLlm extends BaseLlm {
    */
   private convertTools(toolsDict: { [key: string]: BaseTool }): OllamaTool[] {
     if (!toolsDict || Object.keys(toolsDict).length === 0) {
+      console.log(`[OllamaLlm] No tools in toolsDict`);
       return [];
     }
 
+    console.log(`[OllamaLlm] toolsDict keys: ${Object.keys(toolsDict).join(', ')}`);
     const tools: OllamaTool[] = [];
 
-    for (const tool of Object.values(toolsDict)) {
+    for (const [name, tool] of Object.entries(toolsDict)) {
       const declaration = tool._getDeclaration?.();
       if (!declaration) {
+        console.log(`[OllamaLlm] Tool ${name} has no declaration, skipping`);
         continue;
       }
 
+      console.log(`[OllamaLlm] Adding tool: ${declaration.name}`);
+      console.log(`[OllamaLlm] Tool ${declaration.name} parameters: ${JSON.stringify(declaration.parameters)}`);
       tools.push({
         type: 'function',
         function: {
@@ -324,7 +370,9 @@ export class OllamaLlm extends BaseLlm {
     }
 
     // Add function calls if present
-    if (response.message.tool_calls) {
+    let hasToolCalls = false;
+    if (response.message.tool_calls && response.message.tool_calls.length > 0) {
+      hasToolCalls = true;
       for (const toolCall of response.message.tool_calls) {
         parts.push({
           functionCall: {
@@ -335,15 +383,22 @@ export class OllamaLlm extends BaseLlm {
       }
     }
 
+    // Ensure we always have at least an empty text part
+    if (parts.length === 0) {
+      parts.push({ text: '' });
+    }
+
     const content: Content = {
       role: 'model',
       parts,
     };
 
+    // When there are tool calls, turnComplete should be false so ADK continues processing
+    // Only mark turnComplete when there are no tool calls and Ollama says done
     return {
       content,
       partial,
-      turnComplete: response.done,
+      turnComplete: response.done && !hasToolCalls,
     };
   }
 }

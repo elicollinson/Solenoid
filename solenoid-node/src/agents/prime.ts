@@ -18,7 +18,7 @@
  * - @google/adk: LlmAgent for ADK-compatible agent with subAgents
  */
 import { LlmAgent } from '@google/adk';
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 import { planningAgent, createPlanningAgent } from './planning.js';
 
@@ -72,9 +72,9 @@ try {
   settings = null;
 }
 
-const modelConfig = settings
-  ? getModelConfig('prime_agent', settings)
-  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
+const modelName = settings
+  ? getAdkModelName('prime_agent', settings)
+  : 'gemini-2.5-flash';
 
 const customPrompt = settings ? getAgentPrompt('prime_agent', settings) : undefined;
 
@@ -83,7 +83,7 @@ const customPrompt = settings ? getAgentPrompt('prime_agent', settings) : undefi
  */
 export const primeAgent = new LlmAgent({
   name: 'prime_agent',
-  model: modelConfig.name,
+  model: modelName,
   description: 'Intelligent router that delegates to planning or answers directly.',
   instruction: customPrompt ?? DEFAULT_INSTRUCTION,
   afterModelCallback: saveMemoriesOnFinalResponse,
@@ -99,7 +99,7 @@ export async function createPrimeAgent(): Promise<LlmAgent> {
 
   return new LlmAgent({
     name: 'prime_agent',
-    model: modelConfig.name,
+    model: modelName,
     description: 'Intelligent router that delegates to planning or answers directly.',
     instruction: customPrompt ?? DEFAULT_INSTRUCTION,
     afterModelCallback: saveMemoriesOnFinalResponse,

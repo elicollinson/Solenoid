@@ -15,7 +15,7 @@ import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 import { braveSearch } from './brave-search.js';
 import { readWebpage } from './web-reader.js';
-import { executeCode } from '../agents/code-executor.js';
+import { executeCode } from './code-execution.js';
 
 /**
  * Brave Search ADK Tool

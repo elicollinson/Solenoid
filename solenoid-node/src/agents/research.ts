@@ -14,7 +14,7 @@
  * - @google/adk: LlmAgent for ADK-compatible agent
  */
 import { LlmAgent } from '@google/adk';
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
 import { braveSearchAdkTool, readWebpageAdkTool } from '../tools/adk-tools.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 
@@ -74,9 +74,9 @@ try {
   settings = null;
 }
 
-const modelConfig = settings
-  ? getModelConfig('research_agent', settings)
-  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
+const modelName = settings
+  ? getAdkModelName('research_agent', settings)
+  : 'gemini-2.5-flash';
 
 const customPrompt = settings ? getAgentPrompt('research_agent', settings) : undefined;
 
@@ -85,7 +85,7 @@ const customPrompt = settings ? getAgentPrompt('research_agent', settings) : und
  */
 export const researchAgent = new LlmAgent({
   name: 'research_agent',
-  model: modelConfig.name,
+  model: modelName,
   description: 'Web research specialist that gathers information from the internet using search and page reading.',
   instruction: customPrompt ?? DEFAULT_INSTRUCTION,
   tools: [braveSearchAdkTool, readWebpageAdkTool],

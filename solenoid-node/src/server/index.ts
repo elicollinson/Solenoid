@@ -22,9 +22,13 @@ import { logger } from 'hono/logger';
 import { streamSSE } from 'hono/streaming';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
+import { setLogLevel, LogLevel } from '@google/adk';
 import { loadSettings } from '../config/index.js';
 import { createAgentHierarchy, createAgentHierarchySync, type AgentRunner } from '../agents/index.js';
 import { serverLogger, setupErrorHandlers } from '../utils/logger.js';
+
+// Enable ADK debug logging
+setLogLevel(LogLevel.DEBUG);
 
 setupErrorHandlers(serverLogger);
 

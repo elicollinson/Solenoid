@@ -26,7 +26,7 @@ interface InstructionContext {
     get<T>(key: string, defaultValue?: T): T | undefined;
   };
 }
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
 import { injectMemories, saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 import { primeAgent, createPrimeAgent } from './prime.js';
 
@@ -64,9 +64,9 @@ try {
   settings = null;
 }
 
-const modelConfig = settings
-  ? getModelConfig('user_proxy_agent', settings)
-  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
+const modelName = settings
+  ? getAdkModelName('user_proxy_agent', settings)
+  : 'gemini-2.5-flash';
 
 const customPrompt = settings ? getAgentPrompt('user_proxy_agent', settings) : undefined;
 
@@ -112,7 +112,7 @@ async function beforeModelCallback(params: { context: CallbackContext; request: 
  */
 export const userProxyAgent = new LlmAgent({
   name: 'user_proxy_agent',
-  model: modelConfig.name,
+  model: modelName,
   description: 'Gateway between user and agent system.',
   instruction: getDynamicInstruction,
   beforeModelCallback,
@@ -134,7 +134,7 @@ export async function createUserProxyAgent(): Promise<LlmAgent> {
 
   return new LlmAgent({
     name: 'user_proxy_agent',
-    model: modelConfig.name,
+    model: modelName,
     description: 'Gateway between user and agent system.',
     instruction: getDynamicInstruction,
     beforeModelCallback,

@@ -23,6 +23,20 @@ import { rootAgent, createUserProxyAgent } from './user-proxy.js';
 
 const APP_NAME = 'Solenoid';
 
+// Debug: Log the agent hierarchy
+function logAgentHierarchy(agent: LlmAgent, indent = 0) {
+  const prefix = '  '.repeat(indent);
+  console.log(`${prefix}[Agent] ${agent.name} (model: ${agent.model})`);
+  if (agent.subAgents && agent.subAgents.length > 0) {
+    for (const subAgent of agent.subAgents) {
+      logAgentHierarchy(subAgent as LlmAgent, indent + 1);
+    }
+  }
+}
+
+console.log('[Runner] Agent hierarchy:');
+logAgentHierarchy(rootAgent);
+
 /**
  * Module-level runner using the static agent hierarchy
  */
@@ -88,28 +102,74 @@ export async function* runAgent(
   const userMessage = createUserContent(input);
 
   // Run the agent and stream responses
-  for await (const event of activeRunner.runAsync({
-    userId: 'default_user',
-    sessionId: sid,
-    newMessage: userMessage,
-  })) {
-    // Extract text content from event
-    if (event.content?.parts) {
-      for (const part of event.content.parts) {
-        if (part.text) {
-          yield { type: 'text', content: part.text };
+  try {
+    let eventIndex = 0;
+    for await (const event of activeRunner.runAsync({
+      userId: 'default_user',
+      sessionId: sid,
+      newMessage: userMessage,
+    })) {
+      eventIndex++;
+      console.log(`\n[Runner] ===== EVENT #${eventIndex} =====`);
+      console.log(`[Runner] Event ID: ${event.id}, from ${event.author}, parts: ${event.content?.parts?.length ?? 0}, role: ${event.content?.role}, isFinal: ${isFinalResponse(event)}, transferToAgent: ${event.actions?.transferToAgent ?? 'none'}`);
+
+      // Highlight if this event has a transfer action
+      if (event.actions?.transferToAgent) {
+        console.log(`[Runner] *** TRANSFER DETECTED: ${event.author} -> ${event.actions.transferToAgent} ***`);
+      }
+
+      // Log what type of parts this event has
+      const partTypes = event.content?.parts?.map((p) => {
+        if ('text' in p && p.text) return 'text';
+        if ('functionCall' in p && p.functionCall) return `functionCall:${p.functionCall.name}`;
+        if ('functionResponse' in p && p.functionResponse) return `functionResponse:${(p.functionResponse as { name?: string }).name}`;
+        return `unknown(${Object.keys(p).join(',')})`;
+      }).join(', ') ?? 'no parts';
+      console.log(`[Runner] Event parts: ${partTypes}`);
+
+      // If this is a function response, log details
+      if (event.content?.parts?.some((p) => 'functionResponse' in p)) {
+        console.log(`[Runner] Function response event detected!`);
+      }
+
+      // Extract text content from event
+      if (event.content?.parts) {
+        for (const part of event.content.parts) {
+          if (part.text) {
+            yield { type: 'text', content: part.text };
+          }
+          // Log tool calls with full details
+          if ('functionCall' in part && part.functionCall) {
+            console.log(`[Runner] Tool call: ${part.functionCall.name}, args: ${JSON.stringify(part.functionCall.args)}`);
+          }
+        }
+      }
+
+      // Check for final response
+      // Note: ADK may yield empty "auth" events that appear final but aren't meaningful
+      // Skip these and continue to the next event
+      if (isFinalResponse(event)) {
+        const hasContent =
+          (event.content?.parts?.length ?? 0) > 0 ||
+          event.actions?.transferToAgent;
+        if (hasContent) {
+          console.log(`[Runner] Final response received from ${event.author}`);
+          yield { type: 'done' };
+          return;
+        } else {
+          console.log(`[Runner] Skipping empty final event, continuing...`);
+          continue;
         }
       }
     }
 
-    // Check for final response
-    if (isFinalResponse(event)) {
-      yield { type: 'done' };
-      return;
-    }
+    console.log(`[Runner] Loop completed without final response`);
+    yield { type: 'done' };
+  } catch (error) {
+    console.error(`[Runner] Error during agent execution:`, error);
+    yield { type: 'text', content: `Error: ${error instanceof Error ? error.message : String(error)}` };
+    yield { type: 'done' };
   }
-
-  yield { type: 'done' };
 }
 
 /**

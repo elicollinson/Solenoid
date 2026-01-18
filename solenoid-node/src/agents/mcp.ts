@@ -16,7 +16,7 @@
  * - @modelcontextprotocol/sdk: Official MCP client implementation
  */
 import { LlmAgent } from '@google/adk';
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
 import { createMcpAdkTools } from '../tools/mcp-adk-adapter.js';
 import { getMcpManager } from '../mcp/index.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
@@ -58,9 +58,9 @@ try {
   settings = null;
 }
 
-const modelConfig = settings
-  ? getModelConfig('mcp_agent', settings)
-  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
+const modelName = settings
+  ? getAdkModelName('mcp_agent', settings)
+  : 'gemini-2.5-flash';
 
 const customPrompt = settings ? getAgentPrompt('mcp_agent', settings) : undefined;
 
@@ -70,7 +70,7 @@ const customPrompt = settings ? getAgentPrompt('mcp_agent', settings) : undefine
  */
 export const mcpAgent = new LlmAgent({
   name: 'mcp_agent',
-  model: modelConfig.name,
+  model: modelName,
   description: 'MCP tools specialist for documentation lookup, file operations, and external integrations.',
   instruction: customPrompt ?? DEFAULT_INSTRUCTION,
   tools: [], // Tools are loaded dynamically via createMcpAgent
@@ -88,7 +88,7 @@ export async function createMcpAgent(): Promise<LlmAgent> {
   // Create a new agent with the discovered tools
   return new LlmAgent({
     name: 'mcp_agent',
-    model: modelConfig.name,
+    model: modelName,
     description: 'MCP tools specialist for documentation lookup, file operations, and external integrations.',
     instruction: customPrompt ?? DEFAULT_INSTRUCTION,
     tools: mcpTools,

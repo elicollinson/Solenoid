@@ -16,10 +16,13 @@
  * - pyodide: WebAssembly Python runtime for secure sandboxed execution
  */
 import { LlmAgent } from '@google/adk';
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
 import { executeCodeAdkTool } from '../tools/adk-tools.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
-import { getPythonSandbox, type ExecutionResult } from '../sandbox/index.js';
+import { executeCode } from '../tools/code-execution.js';
+
+// Re-export executeCode for backward compatibility
+export { executeCode };
 
 const DEFAULT_INSTRUCTION = `You are a Python Code Executor Agent operating in a secure WASM sandbox.
 
@@ -73,9 +76,9 @@ try {
   settings = null;
 }
 
-const modelConfig = settings
-  ? getModelConfig('code_executor_agent', settings)
-  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
+const modelName = settings
+  ? getAdkModelName('code_executor_agent', settings)
+  : 'gemini-2.5-flash';
 
 const customPrompt = settings
   ? getAgentPrompt('code_executor_agent', settings)
@@ -86,7 +89,7 @@ const customPrompt = settings
  */
 export const codeExecutorAgent = new LlmAgent({
   name: 'code_executor_agent',
-  model: modelConfig.name,
+  model: modelName,
   description: 'Python code execution specialist for calculations, algorithms, and data processing.',
   instruction: customPrompt ?? DEFAULT_INSTRUCTION,
   tools: [executeCodeAdkTool],
@@ -96,52 +99,6 @@ export const codeExecutorAgent = new LlmAgent({
 // Factory function for backwards compatibility
 export function createCodeExecutorAgent(): LlmAgent {
   return codeExecutorAgent;
-}
-
-/**
- * Execute Python code in the WASM sandbox
- * @param code Python code to execute
- * @returns Formatted execution result
- */
-export async function executeCode(code: string): Promise<string> {
-  const sandbox = getPythonSandbox();
-
-  if (!sandbox.isAvailable()) {
-    await sandbox.initialize();
-  }
-
-  const result = await sandbox.run(code);
-
-  return formatExecutionResult(result);
-}
-
-/**
- * Format execution result for display
- */
-function formatExecutionResult(result: ExecutionResult): string {
-  const parts: string[] = [];
-
-  parts.push(`## Execution ${result.outcome === 'success' ? 'Succeeded' : 'Failed'}`);
-
-  if (result.stdout) {
-    parts.push('\n### Output\n```\n' + result.stdout + '\n```');
-  }
-
-  if (result.stderr) {
-    parts.push('\n### Errors\n```\n' + result.stderr + '\n```');
-  }
-
-  const fileNames = Object.keys(result.outputFiles);
-  if (fileNames.length > 0) {
-    parts.push('\n### Generated Files');
-    for (const name of fileNames) {
-      const content = result.outputFiles[name]!;
-      const preview = content.length > 500 ? content.substring(0, 500) + '...' : content;
-      parts.push(`\n**${name}**\n\`\`\`\n${preview}\n\`\`\``);
-    }
-  }
-
-  return parts.join('\n');
 }
 
 // Legacy tool executors export for backwards compatibility

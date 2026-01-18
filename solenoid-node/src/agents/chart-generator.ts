@@ -19,7 +19,7 @@
  * - pygal: Python SVG charting library (runs in Pyodide sandbox)
  */
 import { LlmAgent } from '@google/adk';
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
 import { generateChartAdkTool } from '../tools/adk-tools.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 import { executeCode } from './code-executor.js';
@@ -101,9 +101,9 @@ try {
   settings = null;
 }
 
-const modelConfig = settings
-  ? getModelConfig('chart_generator_agent', settings)
-  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
+const modelName = settings
+  ? getAdkModelName('chart_generator_agent', settings)
+  : 'gemini-2.5-flash';
 
 const customPrompt = settings
   ? getAgentPrompt('chart_generator_agent', settings)
@@ -114,7 +114,7 @@ const customPrompt = settings
  */
 export const chartGeneratorAgent = new LlmAgent({
   name: 'chart_generator_agent',
-  model: modelConfig.name,
+  model: modelName,
   description: 'Data visualization specialist that creates SVG charts using Pygal.',
   instruction: customPrompt ?? DEFAULT_INSTRUCTION,
   tools: [generateChartAdkTool],

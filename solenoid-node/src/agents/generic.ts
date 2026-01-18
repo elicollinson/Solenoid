@@ -15,7 +15,7 @@
  * - @google/adk: LlmAgent for ADK-compatible agent
  */
 import { LlmAgent } from '@google/adk';
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 
 const DEFAULT_INSTRUCTION = `You are the Generic Executor Agent, handling knowledge tasks.
@@ -51,9 +51,9 @@ try {
   settings = null;
 }
 
-const modelConfig = settings
-  ? getModelConfig('generic_executor_agent', settings)
-  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
+const modelName = settings
+  ? getAdkModelName('generic_executor_agent', settings)
+  : 'gemini-2.5-flash';
 
 const customPrompt = settings
   ? getAgentPrompt('generic_executor_agent', settings)
@@ -64,7 +64,7 @@ const customPrompt = settings
  */
 export const genericAgent = new LlmAgent({
   name: 'generic_executor_agent',
-  model: modelConfig.name,
+  model: modelName,
   description: 'General-purpose knowledge worker for text-based tasks like writing, summarization, and analysis.',
   instruction: customPrompt ?? DEFAULT_INSTRUCTION,
   afterModelCallback: saveMemoriesOnFinalResponse,
