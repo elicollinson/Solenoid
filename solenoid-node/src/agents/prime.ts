@@ -1,5 +1,5 @@
 /**
- * Prime Agent (Router)
+ * Prime Agent / Router (ADK)
  *
  * Intelligent router that decides whether to answer directly from knowledge
  * or delegate to the planning system. Simple factual questions are answered
@@ -13,10 +13,14 @@
  * - Research requiring sources and citations
  * - File operations via MCP
  * - Multi-step composite tasks
+ *
+ * Dependencies:
+ * - @google/adk: LlmAgent for ADK-compatible agent with subAgents
  */
-import { BaseAgent } from './base-agent.js';
-import type { Agent } from './types.js';
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { LlmAgent } from '@google/adk';
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
+import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
+import { planningAgent, createPlanningAgent } from './planning.js';
 
 const DEFAULT_INSTRUCTION = `You are the Prime Agent, the intelligent router of the agent system.
 
@@ -60,24 +64,45 @@ If BOTH are NO → Answer directly.
 - ALWAYS transfer your final result to your parent agent upon completion.
 - Keep direct answers concise but complete.`;
 
-export function createPrimeAgent(planningAgent: Agent): Agent {
-  let settings;
-  try {
-    settings = loadSettings();
-  } catch {
-    settings = null;
-  }
+// Load settings with fallback
+let settings;
+try {
+  settings = loadSettings();
+} catch {
+  settings = null;
+}
 
-  const modelConfig = settings
-    ? getModelConfig('prime_agent', settings)
-    : { name: 'llama3.1:8b', provider: 'ollama_chat' as const, context_length: 128000 };
+const modelName = settings
+  ? getAdkModelName('prime_agent', settings)
+  : 'gemini-2.5-flash';
 
-  const customPrompt = settings ? getAgentPrompt('prime_agent', settings) : undefined;
+const customPrompt = settings ? getAgentPrompt('prime_agent', settings) : undefined;
 
-  return new BaseAgent({
+/**
+ * Prime LlmAgent - intelligent router that decides direct answer vs delegation
+ */
+export const primeAgent = new LlmAgent({
+  name: 'prime_agent',
+  model: modelName,
+  description: 'Intelligent router that delegates to planning or answers directly.',
+  instruction: customPrompt ?? DEFAULT_INSTRUCTION,
+  afterModelCallback: saveMemoriesOnFinalResponse,
+  subAgents: [planningAgent],
+});
+
+/**
+ * Creates a prime agent with fully initialized MCP tools
+ * Use this when you need MCP tools to be fully initialized
+ */
+export async function createPrimeAgent(): Promise<LlmAgent> {
+  const initializedPlanningAgent = await createPlanningAgent();
+
+  return new LlmAgent({
     name: 'prime_agent',
-    model: modelConfig.name,
+    model: modelName,
+    description: 'Intelligent router that delegates to planning or answers directly.',
     instruction: customPrompt ?? DEFAULT_INSTRUCTION,
-    subAgents: [planningAgent],
+    afterModelCallback: saveMemoriesOnFinalResponse,
+    subAgents: [initializedPlanningAgent],
   });
 }

@@ -1,5 +1,5 @@
 /**
- * Code Executor Agent
+ * Code Executor Agent (ADK)
  *
  * Python execution specialist running in a secure WebAssembly sandbox.
  * Handles computational tasks, calculations, algorithms, and data processing.
@@ -12,13 +12,17 @@
  * - Output captured via stdout (print statements)
  *
  * Dependencies:
+ * - @google/adk: LlmAgent for ADK-compatible agent
  * - pyodide: WebAssembly Python runtime for secure sandboxed execution
  */
-import { BaseAgent } from './base-agent.js';
-import type { Agent } from './types.js';
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
-import { getPythonSandbox, type ExecutionResult } from '../sandbox/index.js';
-import type { ToolDefinition } from '../llm/types.js';
+import { LlmAgent } from '@google/adk';
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
+import { executeCodeAdkTool } from '../tools/adk-tools.js';
+import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
+import { executeCode } from '../tools/code-execution.js';
+
+// Re-export executeCode for backward compatibility
+export { executeCode };
 
 const DEFAULT_INSTRUCTION = `You are a Python Code Executor Agent operating in a secure WASM sandbox.
 
@@ -64,87 +68,40 @@ Python standard library including:
 - NEVER attempt file system operations outside the sandbox
 - ALWAYS use print() to output results`;
 
-const executeCodeToolDef: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'execute_code',
-    description: 'Execute Python code in a secure WASM sandbox. Returns stdout, stderr, and any generated files.',
-    parameters: {
-      type: 'object',
-      properties: {
-        code: {
-          type: 'string',
-          description: 'The Python code to execute. Use print() for output.',
-        },
-      },
-      required: ['code'],
-    },
-  },
-};
-
-export async function executeCode(code: string): Promise<string> {
-  const sandbox = getPythonSandbox();
-
-  if (!sandbox.isAvailable()) {
-    await sandbox.initialize();
-  }
-
-  const result = await sandbox.run(code);
-
-  return formatExecutionResult(result);
+// Load settings with fallback
+let settings;
+try {
+  settings = loadSettings();
+} catch {
+  settings = null;
 }
 
-function formatExecutionResult(result: ExecutionResult): string {
-  const parts: string[] = [];
+const modelName = settings
+  ? getAdkModelName('code_executor_agent', settings)
+  : 'gemini-2.5-flash';
 
-  parts.push(`## Execution ${result.outcome === 'success' ? 'Succeeded' : 'Failed'}`);
+const customPrompt = settings
+  ? getAgentPrompt('code_executor_agent', settings)
+  : undefined;
 
-  if (result.stdout) {
-    parts.push('\n### Output\n```\n' + result.stdout + '\n```');
-  }
+/**
+ * Code Executor LlmAgent - Python execution specialist
+ */
+export const codeExecutorAgent = new LlmAgent({
+  name: 'code_executor_agent',
+  model: modelName,
+  description: 'Python code execution specialist for calculations, algorithms, and data processing.',
+  instruction: customPrompt ?? DEFAULT_INSTRUCTION,
+  tools: [executeCodeAdkTool],
+  afterModelCallback: saveMemoriesOnFinalResponse,
+});
 
-  if (result.stderr) {
-    parts.push('\n### Errors\n```\n' + result.stderr + '\n```');
-  }
-
-  const fileNames = Object.keys(result.outputFiles);
-  if (fileNames.length > 0) {
-    parts.push('\n### Generated Files');
-    for (const name of fileNames) {
-      const content = result.outputFiles[name]!;
-      const preview = content.length > 500 ? content.substring(0, 500) + '...' : content;
-      parts.push(`\n**${name}**\n\`\`\`\n${preview}\n\`\`\``);
-    }
-  }
-
-  return parts.join('\n');
+// Factory function for backwards compatibility
+export function createCodeExecutorAgent(): LlmAgent {
+  return codeExecutorAgent;
 }
 
-export function createCodeExecutorAgent(): Agent {
-  let settings;
-  try {
-    settings = loadSettings();
-  } catch {
-    settings = null;
-  }
-
-  const modelConfig = settings
-    ? getModelConfig('code_executor_agent', settings)
-    : { name: 'llama3.1:8b', provider: 'ollama_chat' as const, context_length: 128000 };
-
-  const customPrompt = settings
-    ? getAgentPrompt('code_executor_agent', settings)
-    : undefined;
-
-  return new BaseAgent({
-    name: 'code_executor_agent',
-    model: modelConfig.name,
-    instruction: customPrompt ?? DEFAULT_INSTRUCTION,
-    tools: [executeCodeToolDef],
-    disallowTransferToParent: true,
-  });
-}
-
+// Legacy tool executors export for backwards compatibility
 export const codeExecutorToolExecutors: Record<
   string,
   (args: Record<string, unknown>) => Promise<string>

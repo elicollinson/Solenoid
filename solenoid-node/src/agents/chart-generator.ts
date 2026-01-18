@@ -1,5 +1,5 @@
 /**
- * Chart Generator Agent
+ * Chart Generator Agent (ADK)
  *
  * Data visualization specialist using ink-chart for terminal-based charts.
  * Creates inline charts for various data types including bar, line, pie,
@@ -17,14 +17,13 @@
  * - Charts are rendered inline in the chat using ink-chart components
  *
  * Google ADK Compatibility:
+ * - Uses @google/adk LlmAgent for ADK-compatible agent
  * - Exports ADK-compatible FunctionTool for use with @google/adk
- * - Maintains backward compatibility with existing BaseAgent system
  */
-import { BaseAgent } from './base-agent.js';
-import type { Agent } from './types.js';
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
-import { renderChartToolDef, parseChartArgs } from '../charts/index.js';
-import { FunctionTool } from '@google/adk';
+import { LlmAgent, FunctionTool } from '@google/adk';
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
+import { parseChartArgs } from '../charts/index.js';
+import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 import { z } from 'zod';
 
 const DEFAULT_INSTRUCTION = `You are a Chart Generator Agent specializing in terminal-based data visualizations.
@@ -110,50 +109,6 @@ Use these color names: "red", "green", "blue", "yellow", "cyan", "magenta", "whi
 - Use colors to distinguish different data series or categories
 - Keep labels concise but meaningful`;
 
-export function createChartGeneratorAgent(): Agent {
-  let settings;
-  try {
-    settings = loadSettings();
-  } catch {
-    settings = null;
-  }
-
-  const modelConfig = settings
-    ? getModelConfig('chart_generator_agent', settings)
-    : { name: 'llama3.1:8b', provider: 'ollama_chat' as const, context_length: 128000 };
-
-  const customPrompt = settings
-    ? getAgentPrompt('chart_generator_agent', settings)
-    : undefined;
-
-  return new BaseAgent({
-    name: 'chart_generator_agent',
-    model: modelConfig.name,
-    instruction: customPrompt ?? DEFAULT_INSTRUCTION,
-    tools: [renderChartToolDef],
-    disallowTransferToParent: true,
-  });
-}
-
-/**
- * Tool executors for the chart generator agent.
- * The render_chart tool parses the arguments and returns a success message.
- * The actual rendering happens on the frontend based on the tool call data.
- */
-export const chartGeneratorToolExecutors: Record<
-  string,
-  (args: Record<string, unknown>) => Promise<string>
-> = {
-  render_chart: async (args) => {
-    const result = parseChartArgs(args);
-    if (!result.success) {
-      return `Error: ${result.error}`;
-    }
-    const config = result.config!;
-    return `Chart rendered successfully: ${config.chartType} chart${config.title ? ` - "${config.title}"` : ''}`;
-  },
-};
-
 /**
  * Google ADK FunctionTool for chart rendering.
  *
@@ -222,3 +177,61 @@ Choose the appropriate chart type:
     };
   },
 });
+
+// Load settings with fallback
+let settings: ReturnType<typeof loadSettings> | null;
+try {
+  settings = loadSettings();
+} catch {
+  settings = null;
+}
+
+const adkModelName = settings
+  ? getAdkModelName('chart_generator_agent', settings)
+  : 'gemini-2.5-flash';
+
+const customPrompt = settings
+  ? getAgentPrompt('chart_generator_agent', settings)
+  : undefined;
+
+/**
+ * Chart Generator LlmAgent - ink-chart visualization specialist (Google ADK)
+ *
+ * This is the primary ADK-compatible agent that uses the Google ADK LlmAgent
+ * with the renderChartAdkTool for terminal-based chart rendering.
+ */
+export const chartGeneratorAgent = new LlmAgent({
+  name: 'chart_generator_agent',
+  model: adkModelName,
+  description: 'Data visualization specialist that creates terminal charts using ink-chart.',
+  instruction: customPrompt ?? DEFAULT_INSTRUCTION,
+  tools: [renderChartAdkTool],
+  afterModelCallback: saveMemoriesOnFinalResponse,
+});
+
+/**
+ * Factory function for creating chart generator agent.
+ * Returns the ADK LlmAgent for use in the agent hierarchy.
+ */
+export function createChartGeneratorAgent(): LlmAgent {
+  return chartGeneratorAgent;
+}
+
+/**
+ * Tool executors for the chart generator agent.
+ * The render_chart tool parses the arguments and returns a success message.
+ * The actual rendering happens on the frontend based on the tool call data.
+ */
+export const chartGeneratorToolExecutors: Record<
+  string,
+  (args: Record<string, unknown>) => Promise<string>
+> = {
+  render_chart: async (args) => {
+    const result = parseChartArgs(args);
+    if (!result.success) {
+      return `Error: ${result.error}`;
+    }
+    const config = result.config!;
+    return `Chart rendered successfully: ${config.chartType} chart${config.title ? ` - "${config.title}"` : ''}`;
+  },
+};

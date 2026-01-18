@@ -1,87 +1,202 @@
 /**
- * Agent Runner
+ * Agent Runner (ADK)
  *
- * Session manager that orchestrates agent execution. Maintains conversation
- * history per session, transforms user input into agent requests, and streams
- * responses back. Acts as the interface between the server API and the agent system.
+ * Session manager that orchestrates agent execution using ADK's InMemoryRunner.
+ * Maintains conversation history per session, transforms user input into agent
+ * requests, and streams responses back. Acts as the interface between the
+ * server API and the ADK-based agent system.
  *
  * Features:
+ * - ADK InMemoryRunner for session management
+ * - Async generator interface for response streaming (backwards compatible)
  * - Session-based conversation tracking with unique session IDs
- * - Persistent message history within sessions
- * - Async generator interface for response streaming
+ *
+ * Dependencies:
+ * - @google/adk: InMemoryRunner for session-based agent execution
+ * - @google/genai: Content type for message formatting
  */
-import type { Agent, AgentContext, AgentRequest, AgentStreamChunk } from './types.js';
+import { InMemoryRunner, isFinalResponse } from '@google/adk';
+import type { LlmAgent } from '@google/adk';
+import type { Content } from '@google/genai';
+import type { AgentStreamChunk } from './types.js';
+import { rootAgent, createUserProxyAgent } from './user-proxy.js';
 
-interface Session {
-  id: string;
-  state: Record<string, unknown>;
-  messages: Array<{ role: string; content: string }>;
+const APP_NAME = 'Solenoid';
+
+// Debug: Log the agent hierarchy
+function logAgentHierarchy(agent: LlmAgent, indent = 0) {
+  const prefix = '  '.repeat(indent);
+  console.log(`${prefix}[Agent] ${agent.name} (model: ${agent.model})`);
+  if (agent.subAgents && agent.subAgents.length > 0) {
+    for (const subAgent of agent.subAgents) {
+      logAgentHierarchy(subAgent as LlmAgent, indent + 1);
+    }
+  }
 }
 
-export class AgentRunner {
-  private rootAgent: Agent;
-  private sessions: Map<string, Session> = new Map();
+console.log('[Runner] Agent hierarchy:');
+logAgentHierarchy(rootAgent);
 
-  constructor(rootAgent: Agent) {
-    this.rootAgent = rootAgent;
+/**
+ * Module-level runner using the static agent hierarchy
+ */
+export const runner = new InMemoryRunner({
+  agent: rootAgent,
+  appName: APP_NAME,
+});
+
+/**
+ * Creates a runner with fully initialized MCP tools
+ * Use this when you need MCP tools to be fully initialized
+ */
+export async function createRunner(): Promise<InMemoryRunner> {
+  const initializedRootAgent = await createUserProxyAgent();
+  return new InMemoryRunner({
+    agent: initializedRootAgent,
+    appName: APP_NAME,
+  });
+}
+
+/**
+ * Creates a Content object from text for use with the runner
+ */
+function createUserContent(text: string): Content {
+  return {
+    role: 'user',
+    parts: [{ text }],
+  };
+}
+
+/**
+ * Runs the agent with the given input and yields stream chunks
+ * Compatible with the existing server API
+ *
+ * @param input User message
+ * @param sessionId Optional session ID (creates new if not provided)
+ * @param customRunner Optional custom runner (uses default if not provided)
+ */
+export async function* runAgent(
+  input: string,
+  sessionId?: string,
+  customRunner?: InMemoryRunner
+): AsyncGenerator<AgentStreamChunk, void, unknown> {
+  const activeRunner = customRunner ?? runner;
+  const sid = sessionId ?? crypto.randomUUID();
+
+  // Try to get existing session, or create a new one
+  let session = await activeRunner.sessionService.getSession({
+    appName: APP_NAME,
+    userId: 'default_user',
+    sessionId: sid,
+  });
+
+  if (!session) {
+    session = await activeRunner.sessionService.createSession({
+      appName: APP_NAME,
+      userId: 'default_user',
+      sessionId: sid,
+    });
+  }
+
+  // Create user message
+  const userMessage = createUserContent(input);
+
+  // Run the agent and stream responses
+  try {
+    let eventIndex = 0;
+    for await (const event of activeRunner.runAsync({
+      userId: 'default_user',
+      sessionId: sid,
+      newMessage: userMessage,
+    })) {
+      eventIndex++;
+      console.log(`\n[Runner] ===== EVENT #${eventIndex} =====`);
+      console.log(`[Runner] Event ID: ${event.id}, from ${event.author}, parts: ${event.content?.parts?.length ?? 0}, role: ${event.content?.role}, isFinal: ${isFinalResponse(event)}, transferToAgent: ${event.actions?.transferToAgent ?? 'none'}`);
+
+      // Highlight if this event has a transfer action
+      if (event.actions?.transferToAgent) {
+        console.log(`[Runner] *** TRANSFER DETECTED: ${event.author} -> ${event.actions.transferToAgent} ***`);
+      }
+
+      // Log what type of parts this event has
+      const partTypes = event.content?.parts?.map((p) => {
+        if ('text' in p && p.text) return 'text';
+        if ('functionCall' in p && p.functionCall) return `functionCall:${p.functionCall.name}`;
+        if ('functionResponse' in p && p.functionResponse) return `functionResponse:${(p.functionResponse as { name?: string }).name}`;
+        return `unknown(${Object.keys(p).join(',')})`;
+      }).join(', ') ?? 'no parts';
+      console.log(`[Runner] Event parts: ${partTypes}`);
+
+      // If this is a function response, log details
+      if (event.content?.parts?.some((p) => 'functionResponse' in p)) {
+        console.log(`[Runner] Function response event detected!`);
+      }
+
+      // Extract text content from event
+      if (event.content?.parts) {
+        for (const part of event.content.parts) {
+          if (part.text) {
+            yield { type: 'text', content: part.text };
+          }
+          // Log tool calls with full details
+          if ('functionCall' in part && part.functionCall) {
+            console.log(`[Runner] Tool call: ${part.functionCall.name}, args: ${JSON.stringify(part.functionCall.args)}`);
+          }
+        }
+      }
+
+      // Check for final response
+      // Note: ADK may yield empty "auth" events that appear final but aren't meaningful
+      // Skip these and continue to the next event
+      if (isFinalResponse(event)) {
+        const hasContent =
+          (event.content?.parts?.length ?? 0) > 0 ||
+          event.actions?.transferToAgent;
+        if (hasContent) {
+          console.log(`[Runner] Final response received from ${event.author}`);
+          yield { type: 'done' };
+          return;
+        } else {
+          console.log(`[Runner] Skipping empty final event, continuing...`);
+          continue;
+        }
+      }
+    }
+
+    console.log(`[Runner] Loop completed without final response`);
+    yield { type: 'done' };
+  } catch (error) {
+    console.error(`[Runner] Error during agent execution:`, error);
+    yield { type: 'text', content: `Error: ${error instanceof Error ? error.message : String(error)}` };
+    yield { type: 'done' };
+  }
+}
+
+/**
+ * Legacy AgentRunner class for backwards compatibility
+ * Wraps the ADK InMemoryRunner with the existing interface
+ */
+export class AgentRunner {
+  private adkRunner: InMemoryRunner;
+
+  constructor(agent?: LlmAgent) {
+    this.adkRunner = new InMemoryRunner({
+      agent: agent ?? rootAgent,
+      appName: APP_NAME,
+    });
   }
 
   async *run(
     input: string,
     sessionId?: string
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-    const session = this.getOrCreateSession(sessionId);
-
-    session.messages.push({ role: 'user', content: input });
-
-    const context: AgentContext = {
-      sessionId: session.id,
-      state: session.state,
-    };
-
-    const request: AgentRequest = {
-      messages: session.messages.map((m) => ({
-        role: m.role as 'user' | 'assistant' | 'system',
-        content: m.content,
-      })),
-      context,
-    };
-
-    let assistantContent = '';
-
-    for await (const chunk of this.rootAgent.run(request)) {
-      if (chunk.type === 'text' && chunk.content) {
-        assistantContent += chunk.content;
-      }
-      yield chunk;
-    }
-
-    if (assistantContent) {
-      session.messages.push({ role: 'assistant', content: assistantContent });
-    }
+    yield* runAgent(input, sessionId, this.adkRunner);
   }
 
-  private getOrCreateSession(sessionId?: string): Session {
-    const id = sessionId ?? crypto.randomUUID();
-
-    let session = this.sessions.get(id);
-    if (!session) {
-      session = {
-        id,
-        state: {},
-        messages: [],
-      };
-      this.sessions.set(id, session);
-    }
-
-    return session;
-  }
-
-  getSession(sessionId: string): Session | undefined {
-    return this.sessions.get(sessionId);
-  }
-
-  clearSession(sessionId: string): void {
-    this.sessions.delete(sessionId);
+  /**
+   * Gets the underlying ADK runner
+   */
+  getAdkRunner(): InMemoryRunner {
+    return this.adkRunner;
   }
 }

@@ -1,87 +1,35 @@
 /**
- * Memory Callbacks
+ * Memory Callbacks for ADK Agents
  *
- * Agent lifecycle callbacks for memory integration. Injects relevant memories
- * into agent context before model calls and saves conversation exchanges as
- * episodic memories after responses. Enables agents to recall past interactions.
+ * Agent lifecycle callbacks for memory integration with Google ADK LlmAgents.
+ * Injects relevant memories into agent context before model calls and saves
+ * conversation exchanges as episodic memories after responses.
+ *
+ * Dependencies:
+ * - @google/adk: CallbackContext, LlmRequest, LlmResponse for callback types
  */
-import type { AgentRequest } from '../agents/types.js';
-import type { Message } from '../llm/types.js';
+import type { CallbackContext, LlmRequest, LlmResponse } from '@google/adk';
 import { getMemoryService, type MemoryService } from './service.js';
 import type { SearchResult } from './schema.js';
 
 const DEFAULT_APP_NAME = 'solenoid';
 const DEFAULT_USER_ID = 'default';
 
-export function createMemoryCallbacks(memoryService?: MemoryService) {
-  const getService = () => {
-    if (memoryService) return memoryService;
-    try {
-      return getMemoryService();
-    } catch {
-      return null;
-    }
-  };
-
-  const injectMemories = async (request: AgentRequest): Promise<AgentRequest> => {
-    const service = getService();
-    if (!service) return request;
-
-    const userId = (request.context.state['userId'] as string) ?? DEFAULT_USER_ID;
-    const appName = (request.context.state['appName'] as string) ?? DEFAULT_APP_NAME;
-    const query = request.context.state['originalUserQuery'] as string;
-
-    if (!query) return request;
-
-    try {
-      const results = await service.search(query, userId, appName);
-
-      if (results.length > 0) {
-        request.context.state['loadedMemories'] = results;
-
-        const memoryContext = formatMemoriesForContext(results);
-        request.context.state['memoryContext'] = memoryContext;
-      }
-    } catch (error) {
-      console.warn('Memory injection failed:', error);
-    }
-
-    return request;
-  };
-
-  const saveMemories = async (
-    request: AgentRequest,
-    response: Message
-  ): Promise<void> => {
-    const service = getService();
-    if (!service) return;
-
-    const userId = (request.context.state['userId'] as string) ?? DEFAULT_USER_ID;
-    const appName = (request.context.state['appName'] as string) ?? DEFAULT_APP_NAME;
-
-    // Store the conversation exchange as an episodic memory
-    const query = request.context.state['originalUserQuery'] as string;
-    if (!query || !response.content) return;
-
-    try {
-      await service.addMemory({
-        user_id: userId,
-        app_name: appName,
-        memory_type: 'episodic',
-        text: `User asked: "${query.substring(0, 200)}". Assistant responded about: ${response.content.substring(0, 200)}`,
-        importance: 2,
-      });
-    } catch (error) {
-      console.warn('Memory storage failed:', error);
-    }
-  };
-
-  return {
-    injectMemories,
-    saveMemories,
-  };
+/**
+ * Gets the memory service, returning null if unavailable
+ */
+function getService(memoryService?: MemoryService): MemoryService | null {
+  if (memoryService) return memoryService;
+  try {
+    return getMemoryService();
+  } catch {
+    return null;
+  }
 }
 
+/**
+ * Formats memory search results for injection into agent context
+ */
 function formatMemoriesForContext(results: SearchResult[]): string {
   if (results.length === 0) return '';
 
@@ -95,3 +43,81 @@ function formatMemoriesForContext(results: SearchResult[]): string {
 ${lines.join('\n')}
 `;
 }
+
+/**
+ * ADK beforeModelCallback that injects relevant memories into the context
+ */
+export function createInjectMemoriesCallback(memoryService?: MemoryService) {
+  return async ({ context }: { context: CallbackContext; request: LlmRequest }) => {
+    const service = getService(memoryService);
+    if (!service) return undefined;
+
+    const state = context.state;
+    const userId = (state.get('userId') as string) ?? DEFAULT_USER_ID;
+    const appName = (state.get('appName') as string) ?? DEFAULT_APP_NAME;
+    const query = state.get('originalUserQuery') as string;
+
+    if (!query) return undefined;
+
+    try {
+      const results = await service.search(query, userId, appName);
+
+      if (results.length > 0) {
+        state.set('loadedMemories', results);
+        const memoryContext = formatMemoriesForContext(results);
+        state.set('memoryContext', memoryContext);
+      }
+    } catch (error) {
+      console.warn('Memory injection failed:', error);
+    }
+
+    return undefined; // Continue to model
+  };
+}
+
+/**
+ * ADK afterModelCallback that saves conversation exchanges as episodic memories
+ */
+export function createSaveMemoriesCallback(memoryService?: MemoryService) {
+  return async ({ context, response }: { context: CallbackContext; response: LlmResponse }) => {
+    const service = getService(memoryService);
+    if (!service) return undefined;
+
+    const state = context.state;
+    const userId = (state.get('userId') as string) ?? DEFAULT_USER_ID;
+    const appName = (state.get('appName') as string) ?? DEFAULT_APP_NAME;
+    const query = state.get('originalUserQuery') as string;
+
+    // Extract text content from response
+    const responseText = response.content?.parts
+      ?.map((p) => p.text)
+      .filter(Boolean)
+      .join('');
+
+    if (!query || !responseText) return undefined;
+
+    try {
+      await service.addMemory({
+        user_id: userId,
+        app_name: appName,
+        memory_type: 'episodic',
+        text: `User asked: "${query.substring(0, 200)}". Assistant responded about: ${responseText.substring(0, 200)}`,
+        importance: 2,
+      });
+    } catch (error) {
+      console.warn('Memory storage failed:', error);
+    }
+
+    return undefined; // Use original response
+  };
+}
+
+/**
+ * Pre-configured memory injection callback using default service
+ */
+export const injectMemories = createInjectMemoriesCallback();
+
+/**
+ * Pre-configured memory save callback using default service
+ */
+export const saveMemoriesOnFinalResponse = createSaveMemoriesCallback();

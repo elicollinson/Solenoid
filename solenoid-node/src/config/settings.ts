@@ -175,3 +175,45 @@ export function saveSettings(settings: Record<string, unknown>): void {
   cachedRawSettings = settings;
   cachedSettings = null; // Clear validated cache so it reloads
 }
+
+/**
+ * Get the ADK-compatible model name with provider prefix.
+ * For ollama_chat provider, prepends 'ollama/' to enable ADK LLMRegistry routing.
+ *
+ * @param agentName - The agent name to get model for
+ * @param settings - Optional settings object (will load if not provided)
+ * @returns Model name with appropriate prefix for ADK
+ */
+export function getAdkModelName(agentName: AgentName, settings?: AppSettings): string {
+  const config = getModelConfig(agentName, settings);
+
+  // Add ollama/ prefix for ollama_chat provider so ADK routes to OllamaLlm
+  if (config.provider === 'ollama_chat') {
+    return `ollama/${config.name}`;
+  }
+
+  return config.name;
+}
+
+/**
+ * Get the Ollama host URL from configuration or environment.
+ * Priority: OLLAMA_HOST env var > embeddings.host config > default
+ *
+ * @param settings - Optional settings object (will load if not provided)
+ * @returns Ollama host URL
+ */
+export function getOllamaHost(settings?: AppSettings): string {
+  // Environment variable takes priority
+  if (process.env.OLLAMA_HOST) {
+    return process.env.OLLAMA_HOST;
+  }
+
+  // Try to load from config
+  try {
+    const config = settings ?? loadSettings();
+    return config.embeddings.host;
+  } catch {
+    // Default fallback
+    return 'http://localhost:11434';
+  }
+}

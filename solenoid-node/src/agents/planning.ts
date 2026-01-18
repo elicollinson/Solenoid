@@ -1,21 +1,41 @@
 /**
- * Planning Agent (Orchestrator)
+ * Planning Agent / Orchestrator (ADK)
  *
  * Chief coordinator that orchestrates multi-step tasks by delegating to
  * specialist agents. Has no direct tool access - can only delegate work.
  * Creates explicit plans before execution and handles failures by trying
  * alternative agents.
  *
- * Specialist team:
+ * Specialist team (subAgents):
  * - research_agent: Web search, current data, news
  * - code_executor_agent: Math, calculations, data processing
  * - chart_generator_agent: Pygal visualizations
  * - mcp_agent: Documentation lookup, file operations
  * - generic_executor_agent: Writing, summaries, general text tasks
+ *
+ * Dependencies:
+ * - @google/adk: LlmAgent for ADK-compatible agent with subAgents
  */
-import { BaseAgent } from './base-agent.js';
-import type { Agent } from './types.js';
-import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { LlmAgent } from '@google/adk';
+
+/**
+ * Minimal context interface matching ADK's ReadonlyContext
+ * Used for instruction providers
+ */
+interface InstructionContext {
+  state: {
+    get<T>(key: string, defaultValue?: T): T | undefined;
+  };
+}
+import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
+import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
+
+// Import specialist agents
+import { researchAgent } from './research.js';
+import { genericAgent } from './generic.js';
+import { codeExecutorAgent } from './code-executor.js';
+import { chartGeneratorAgent } from './chart-generator.js';
+import { mcpAgent, createMcpAgent } from './mcp.js';
 
 const DEFAULT_INSTRUCTION = `You are the Chief Planner. You coordinate a team of specialist agents to solve complex tasks.
 
@@ -71,24 +91,73 @@ When the user request is missing details:
 - NEVER call tools directly—you have no tools
 - ALWAYS transfer final result to parent agent when done`;
 
-export function createPlanningAgent(subAgents: Agent[] = []): Agent {
-  let settings;
+// Load settings with fallback
+let settings;
+try {
+  settings = loadSettings();
+} catch {
+  settings = null;
+}
+
+const modelName = settings
+  ? getAdkModelName('planning_agent', settings)
+  : 'gemini-2.5-flash';
+
+const customPrompt = settings ? getAgentPrompt('planning_agent', settings) : undefined;
+
+/**
+ * Dynamic instruction that includes plan state from session
+ */
+function getDynamicInstruction(context: InstructionContext): string {
+  const currentPlan = (context.state.get('plan') as string) ?? '[]';
+  const baseInstruction = customPrompt ?? DEFAULT_INSTRUCTION;
+  return baseInstruction.replace('{plan_state}', currentPlan);
+}
+
+/**
+ * Planning LlmAgent - coordinates specialist agents for complex tasks
+ * Uses static specialist agents for module-level instantiation
+ */
+export const planningAgent = new LlmAgent({
+  name: 'planning_agent',
+  model: modelName,
+  description: 'Orchestrates multi-step tasks across specialist agents.',
+  instruction: getDynamicInstruction,
+  afterModelCallback: saveMemoriesOnFinalResponse,
+  subAgents: [researchAgent, genericAgent, codeExecutorAgent, chartGeneratorAgent, mcpAgent],
+});
+
+/**
+ * Creates a planning agent with dynamic MCP tools
+ * Use this when you need MCP tools to be fully initialized
+ */
+export async function createPlanningAgent(
+  additionalSubAgents: LlmAgent[] = []
+): Promise<LlmAgent> {
+  // Get fully initialized MCP agent
+  let initializedMcpAgent: LlmAgent;
   try {
-    settings = loadSettings();
-  } catch {
-    settings = null;
+    initializedMcpAgent = await createMcpAgent();
+  } catch (error) {
+    console.warn('MCP agent creation failed, using placeholder:', error);
+    initializedMcpAgent = mcpAgent;
   }
 
-  const modelConfig = settings
-    ? getModelConfig('planning_agent', settings)
-    : { name: 'llama3.1:8b', provider: 'ollama_chat' as const, context_length: 128000 };
+  const subAgents: LlmAgent[] = [
+    researchAgent,
+    genericAgent,
+    codeExecutorAgent,
+    chartGeneratorAgent,
+    initializedMcpAgent,
+    ...additionalSubAgents,
+  ];
 
-  const customPrompt = settings ? getAgentPrompt('planning_agent', settings) : undefined;
-
-  return new BaseAgent({
+  return new LlmAgent({
     name: 'planning_agent',
-    model: modelConfig.name,
-    instruction: customPrompt ?? DEFAULT_INSTRUCTION,
+    model: modelName,
+    description: 'Orchestrates multi-step tasks across specialist agents.',
+    instruction: getDynamicInstruction,
+    afterModelCallback: saveMemoriesOnFinalResponse,
     subAgents,
   });
 }
