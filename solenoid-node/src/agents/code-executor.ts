@@ -1,5 +1,5 @@
 /**
- * Code Executor Agent
+ * Code Executor Agent (ADK)
  *
  * Python execution specialist running in a secure WebAssembly sandbox.
  * Handles computational tasks, calculations, algorithms, and data processing.
@@ -12,13 +12,14 @@
  * - Output captured via stdout (print statements)
  *
  * Dependencies:
+ * - @google/adk: LlmAgent for ADK-compatible agent
  * - pyodide: WebAssembly Python runtime for secure sandboxed execution
  */
-import { BaseAgent } from './base-agent.js';
-import type { Agent } from './types.js';
+import { LlmAgent } from '@google/adk';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { executeCodeAdkTool } from '../tools/adk-tools.js';
+import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 import { getPythonSandbox, type ExecutionResult } from '../sandbox/index.js';
-import type { ToolDefinition } from '../llm/types.js';
 
 const DEFAULT_INSTRUCTION = `You are a Python Code Executor Agent operating in a secure WASM sandbox.
 
@@ -64,24 +65,44 @@ Python standard library including:
 - NEVER attempt file system operations outside the sandbox
 - ALWAYS use print() to output results`;
 
-const executeCodeToolDef: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'execute_code',
-    description: 'Execute Python code in a secure WASM sandbox. Returns stdout, stderr, and any generated files.',
-    parameters: {
-      type: 'object',
-      properties: {
-        code: {
-          type: 'string',
-          description: 'The Python code to execute. Use print() for output.',
-        },
-      },
-      required: ['code'],
-    },
-  },
-};
+// Load settings with fallback
+let settings;
+try {
+  settings = loadSettings();
+} catch {
+  settings = null;
+}
 
+const modelConfig = settings
+  ? getModelConfig('code_executor_agent', settings)
+  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
+
+const customPrompt = settings
+  ? getAgentPrompt('code_executor_agent', settings)
+  : undefined;
+
+/**
+ * Code Executor LlmAgent - Python execution specialist
+ */
+export const codeExecutorAgent = new LlmAgent({
+  name: 'code_executor_agent',
+  model: modelConfig.name,
+  description: 'Python code execution specialist for calculations, algorithms, and data processing.',
+  instruction: customPrompt ?? DEFAULT_INSTRUCTION,
+  tools: [executeCodeAdkTool],
+  afterModelCallback: saveMemoriesOnFinalResponse,
+});
+
+// Factory function for backwards compatibility
+export function createCodeExecutorAgent(): LlmAgent {
+  return codeExecutorAgent;
+}
+
+/**
+ * Execute Python code in the WASM sandbox
+ * @param code Python code to execute
+ * @returns Formatted execution result
+ */
 export async function executeCode(code: string): Promise<string> {
   const sandbox = getPythonSandbox();
 
@@ -94,6 +115,9 @@ export async function executeCode(code: string): Promise<string> {
   return formatExecutionResult(result);
 }
 
+/**
+ * Format execution result for display
+ */
 function formatExecutionResult(result: ExecutionResult): string {
   const parts: string[] = [];
 
@@ -120,31 +144,7 @@ function formatExecutionResult(result: ExecutionResult): string {
   return parts.join('\n');
 }
 
-export function createCodeExecutorAgent(): Agent {
-  let settings;
-  try {
-    settings = loadSettings();
-  } catch {
-    settings = null;
-  }
-
-  const modelConfig = settings
-    ? getModelConfig('code_executor_agent', settings)
-    : { name: 'llama3.1:8b', provider: 'ollama_chat' as const, context_length: 128000 };
-
-  const customPrompt = settings
-    ? getAgentPrompt('code_executor_agent', settings)
-    : undefined;
-
-  return new BaseAgent({
-    name: 'code_executor_agent',
-    model: modelConfig.name,
-    instruction: customPrompt ?? DEFAULT_INSTRUCTION,
-    tools: [executeCodeToolDef],
-    disallowTransferToParent: true,
-  });
-}
-
+// Legacy tool executors export for backwards compatibility
 export const codeExecutorToolExecutors: Record<
   string,
   (args: Record<string, unknown>) => Promise<string>

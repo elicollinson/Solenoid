@@ -18,7 +18,7 @@ export const EmbeddingsConfigSchema = z.object({
 
 export const ModelConfigSchema = z.object({
   name: z.string(),
-  provider: z.enum(['ollama_chat', 'openai', 'anthropic']).default('ollama_chat'),
+  provider: z.enum(['ollama_chat', 'openai', 'anthropic', 'gemini']).default('gemini'),
   context_length: z.number().int().positive().default(128000),
 });
 

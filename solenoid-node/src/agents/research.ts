@@ -1,5 +1,5 @@
 /**
- * Research Agent
+ * Research Agent (ADK)
  *
  * Web research specialist that gathers information from the internet.
  * Uses Brave Search API for discovery and fetches full page content
@@ -9,16 +9,14 @@
  * Tools:
  * - universal_search: Brave Search API for web queries
  * - read_webpage: Fetches and extracts text from URLs
+ *
+ * Dependencies:
+ * - @google/adk: LlmAgent for ADK-compatible agent
  */
-import { BaseAgent } from './base-agent.js';
-import type { Agent } from './types.js';
+import { LlmAgent } from '@google/adk';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
-import {
-  braveSearch,
-  braveSearchToolDef,
-  readWebpage,
-  readWebpageToolDef,
-} from '../tools/index.js';
+import { braveSearchAdkTool, readWebpageAdkTool } from '../tools/adk-tools.js';
+import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 
 const DEFAULT_INSTRUCTION = `You are the Research Specialist, an expert in gathering comprehensive information from the web.
 
@@ -68,30 +66,45 @@ Structure your research report as:
 - ALWAYS cite sources for factual claims.
 - Maximum 5 page reads per research task.`;
 
-export function createResearchAgent(): Agent {
-  let settings;
-  try {
-    settings = loadSettings();
-  } catch {
-    settings = null;
-  }
-
-  const modelConfig = settings
-    ? getModelConfig('research_agent', settings)
-    : { name: 'llama3.1:8b', provider: 'ollama_chat' as const, context_length: 128000 };
-
-  const customPrompt = settings ? getAgentPrompt('research_agent', settings) : undefined;
-
-  return new BaseAgent({
-    name: 'research_agent',
-    model: modelConfig.name,
-    instruction: customPrompt ?? DEFAULT_INSTRUCTION,
-    tools: [braveSearchToolDef, readWebpageToolDef],
-    disallowTransferToParent: true,
-  });
+// Load settings with fallback
+let settings;
+try {
+  settings = loadSettings();
+} catch {
+  settings = null;
 }
 
+const modelConfig = settings
+  ? getModelConfig('research_agent', settings)
+  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
+
+const customPrompt = settings ? getAgentPrompt('research_agent', settings) : undefined;
+
+/**
+ * Research LlmAgent - web research specialist with search and web reading tools
+ */
+export const researchAgent = new LlmAgent({
+  name: 'research_agent',
+  model: modelConfig.name,
+  description: 'Web research specialist that gathers information from the internet using search and page reading.',
+  instruction: customPrompt ?? DEFAULT_INSTRUCTION,
+  tools: [braveSearchAdkTool, readWebpageAdkTool],
+  afterModelCallback: saveMemoriesOnFinalResponse,
+});
+
+// Factory function for backwards compatibility
+export function createResearchAgent(): LlmAgent {
+  return researchAgent;
+}
+
+// Legacy tool executors export for backwards compatibility
 export const researchToolExecutors: Record<string, (args: Record<string, unknown>) => Promise<string>> = {
-  universal_search: async (args) => braveSearch(args['query'] as string),
-  read_webpage: async (args) => readWebpage(args['url'] as string),
+  universal_search: async (args) => {
+    const { braveSearch } = await import('../tools/brave-search.js');
+    return braveSearch(args['query'] as string);
+  },
+  read_webpage: async (args) => {
+    const { readWebpage } = await import('../tools/web-reader.js');
+    return readWebpage(args['url'] as string);
+  },
 };

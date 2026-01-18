@@ -1,5 +1,5 @@
 /**
- * Chart Generator Agent
+ * Chart Generator Agent (ADK)
  *
  * Data visualization specialist using Pygal in a WebAssembly sandbox.
  * Creates SVG charts for various data types including bar, line, pie,
@@ -15,13 +15,14 @@
  * - StackedBar/StackedLine: Stacked comparisons
  *
  * Dependencies:
+ * - @google/adk: LlmAgent for ADK-compatible agent
  * - pygal: Python SVG charting library (runs in Pyodide sandbox)
  */
-import { BaseAgent } from './base-agent.js';
-import type { Agent } from './types.js';
+import { LlmAgent } from '@google/adk';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { generateChartAdkTool } from '../tools/adk-tools.js';
+import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 import { executeCode } from './code-executor.js';
-import type { ToolDefinition } from '../llm/types.js';
 
 const DEFAULT_INSTRUCTION = `You are a Python Chart Generator Agent specializing in Pygal visualizations.
 
@@ -92,49 +93,40 @@ print("Chart saved to chart.svg")
 - NEVER save to filenames other than chart.svg
 - ALWAYS include print("Chart saved to chart.svg") after rendering`;
 
-const generateChartToolDef: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'generate_chart',
-    description: 'Generate a chart using Pygal. The code should create a chart and save it to chart.svg.',
-    parameters: {
-      type: 'object',
-      properties: {
-        code: {
-          type: 'string',
-          description: 'Python code using Pygal to generate a chart. Must save to chart.svg.',
-        },
-      },
-      required: ['code'],
-    },
-  },
-};
-
-export function createChartGeneratorAgent(): Agent {
-  let settings;
-  try {
-    settings = loadSettings();
-  } catch {
-    settings = null;
-  }
-
-  const modelConfig = settings
-    ? getModelConfig('chart_generator_agent', settings)
-    : { name: 'llama3.1:8b', provider: 'ollama_chat' as const, context_length: 128000 };
-
-  const customPrompt = settings
-    ? getAgentPrompt('chart_generator_agent', settings)
-    : undefined;
-
-  return new BaseAgent({
-    name: 'chart_generator_agent',
-    model: modelConfig.name,
-    instruction: customPrompt ?? DEFAULT_INSTRUCTION,
-    tools: [generateChartToolDef],
-    disallowTransferToParent: true,
-  });
+// Load settings with fallback
+let settings;
+try {
+  settings = loadSettings();
+} catch {
+  settings = null;
 }
 
+const modelConfig = settings
+  ? getModelConfig('chart_generator_agent', settings)
+  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
+
+const customPrompt = settings
+  ? getAgentPrompt('chart_generator_agent', settings)
+  : undefined;
+
+/**
+ * Chart Generator LlmAgent - Pygal visualization specialist
+ */
+export const chartGeneratorAgent = new LlmAgent({
+  name: 'chart_generator_agent',
+  model: modelConfig.name,
+  description: 'Data visualization specialist that creates SVG charts using Pygal.',
+  instruction: customPrompt ?? DEFAULT_INSTRUCTION,
+  tools: [generateChartAdkTool],
+  afterModelCallback: saveMemoriesOnFinalResponse,
+});
+
+// Factory function for backwards compatibility
+export function createChartGeneratorAgent(): LlmAgent {
+  return chartGeneratorAgent;
+}
+
+// Legacy tool executors export for backwards compatibility
 export const chartGeneratorToolExecutors: Record<
   string,
   (args: Record<string, unknown>) => Promise<string>

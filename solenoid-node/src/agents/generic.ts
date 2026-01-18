@@ -1,5 +1,5 @@
 /**
- * Generic Executor Agent
+ * Generic Executor Agent (ADK)
  *
  * General-purpose text worker for knowledge-based tasks that don't require
  * specialized tools. Handles content creation, summarization, analysis,
@@ -10,10 +10,13 @@
  * - Write creative content (emails, documents, stories)
  * - Summarize and analyze provided text
  * - Generate structured content (lists, outlines, comparisons)
+ *
+ * Dependencies:
+ * - @google/adk: LlmAgent for ADK-compatible agent
  */
-import { BaseAgent } from './base-agent.js';
-import type { Agent } from './types.js';
+import { LlmAgent } from '@google/adk';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 
 const DEFAULT_INSTRUCTION = `You are the Generic Executor Agent, handling knowledge tasks.
 
@@ -40,26 +43,34 @@ You handle general-purpose tasks. You are the "knowledge worker" for text-based 
 - ALWAYS transfer your result to your parent agent upon completion
 - If asked to do something outside your capabilities, clearly state what agent should be used instead`;
 
-export function createGenericAgent(): Agent {
-  let settings;
-  try {
-    settings = loadSettings();
-  } catch {
-    settings = null;
-  }
+// Load settings with fallback
+let settings;
+try {
+  settings = loadSettings();
+} catch {
+  settings = null;
+}
 
-  const modelConfig = settings
-    ? getModelConfig('generic_executor_agent', settings)
-    : { name: 'llama3.1:8b', provider: 'ollama_chat' as const, context_length: 128000 };
+const modelConfig = settings
+  ? getModelConfig('generic_executor_agent', settings)
+  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
 
-  const customPrompt = settings
-    ? getAgentPrompt('generic_executor_agent', settings)
-    : undefined;
+const customPrompt = settings
+  ? getAgentPrompt('generic_executor_agent', settings)
+  : undefined;
 
-  return new BaseAgent({
-    name: 'generic_executor_agent',
-    model: modelConfig.name,
-    instruction: customPrompt ?? DEFAULT_INSTRUCTION,
-    disallowTransferToParent: true,
-  });
+/**
+ * Generic Executor LlmAgent - handles knowledge-based text tasks
+ */
+export const genericAgent = new LlmAgent({
+  name: 'generic_executor_agent',
+  model: modelConfig.name,
+  description: 'General-purpose knowledge worker for text-based tasks like writing, summarization, and analysis.',
+  instruction: customPrompt ?? DEFAULT_INSTRUCTION,
+  afterModelCallback: saveMemoriesOnFinalResponse,
+});
+
+// Factory function for backwards compatibility
+export function createGenericAgent(): LlmAgent {
+  return genericAgent;
 }

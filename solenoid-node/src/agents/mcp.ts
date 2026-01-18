@@ -1,5 +1,5 @@
 /**
- * MCP Agent
+ * MCP Agent (ADK)
  *
  * External tool integration specialist using Model Context Protocol (MCP).
  * Connects to configured MCP servers to access documentation, file systems,
@@ -12,12 +12,14 @@
  * - Custom integrations defined in app_settings.yaml
  *
  * Dependencies:
+ * - @google/adk: LlmAgent for ADK-compatible agent
  * - @modelcontextprotocol/sdk: Official MCP client implementation
  */
-import { BaseAgent } from './base-agent.js';
-import type { Agent } from './types.js';
+import { LlmAgent } from '@google/adk';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
+import { createMcpAdkTools } from '../tools/mcp-adk-adapter.js';
 import { getMcpManager } from '../mcp/index.js';
+import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 
 const DEFAULT_INSTRUCTION = `You are an MCP tools specialist. You MUST use the tools provided to you.
 
@@ -48,34 +50,53 @@ After calling tools and getting results, format your response as:
 ## Status
 Success / Partial / Could Not Complete`;
 
-export async function createMcpAgent(): Promise<Agent> {
-  let settings;
-  try {
-    settings = loadSettings();
-  } catch {
-    settings = null;
-  }
+// Load settings with fallback
+let settings;
+try {
+  settings = loadSettings();
+} catch {
+  settings = null;
+}
 
-  const modelConfig = settings
-    ? getModelConfig('mcp_agent', settings)
-    : { name: 'llama3.1:8b', provider: 'ollama_chat' as const, context_length: 128000 };
+const modelConfig = settings
+  ? getModelConfig('mcp_agent', settings)
+  : { name: 'gemini-2.5-flash', provider: 'gemini' as const, context_length: 128000 };
 
-  const customPrompt = settings ? getAgentPrompt('mcp_agent', settings) : undefined;
+const customPrompt = settings ? getAgentPrompt('mcp_agent', settings) : undefined;
 
-  // Initialize MCP manager and get tools
-  const mcpManager = getMcpManager();
-  await mcpManager.initialize();
-  const mcpTools = mcpManager.getToolDefinitions();
+/**
+ * MCP Agent placeholder - tools are loaded dynamically
+ * Use createMcpAgent() to get a fully initialized agent with MCP tools
+ */
+export const mcpAgent = new LlmAgent({
+  name: 'mcp_agent',
+  model: modelConfig.name,
+  description: 'MCP tools specialist for documentation lookup, file operations, and external integrations.',
+  instruction: customPrompt ?? DEFAULT_INSTRUCTION,
+  tools: [], // Tools are loaded dynamically via createMcpAgent
+  afterModelCallback: saveMemoriesOnFinalResponse,
+});
 
-  return new BaseAgent({
+/**
+ * Creates a fully initialized MCP agent with dynamically discovered tools
+ * @returns LlmAgent configured with MCP tools
+ */
+export async function createMcpAgent(): Promise<LlmAgent> {
+  // Load MCP tools dynamically
+  const mcpTools = await createMcpAdkTools();
+
+  // Create a new agent with the discovered tools
+  return new LlmAgent({
     name: 'mcp_agent',
     model: modelConfig.name,
+    description: 'MCP tools specialist for documentation lookup, file operations, and external integrations.',
     instruction: customPrompt ?? DEFAULT_INSTRUCTION,
     tools: mcpTools,
-    disallowTransferToParent: true,
+    afterModelCallback: saveMemoriesOnFinalResponse,
   });
 }
 
+// Legacy tool executors export for backwards compatibility
 export const mcpToolExecutors = {
   async execute(toolName: string, args: Record<string, unknown>): Promise<string> {
     const mcpManager = getMcpManager();

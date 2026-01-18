@@ -1,8 +1,10 @@
 /**
- * Agent Factory
+ * Agent Factory (ADK)
  *
- * Creates and wires up the complete agent hierarchy. Establishes the delegation
- * chain: UserProxy → Prime → Planning → Specialists (Research, Code, Chart, MCP, Generic).
+ * Creates and wires up the complete agent hierarchy. The hierarchy is now
+ * established through module-level imports, following the Python pattern.
+ * This factory provides backwards-compatible async initialization for
+ * cases where MCP tools need to be fully loaded.
  *
  * Agent Hierarchy:
  * - user_proxy_agent: Entry point, quality gates responses before delivery
@@ -10,98 +12,107 @@
  * - planning_agent: Orchestrates multi-step tasks across specialist agents
  * - Specialists: Domain-specific agents (research, code execution, charts, MCP tools, general text)
  *
- * Provides both async (with MCP) and sync (without MCP) initialization variants.
+ * Dependencies:
+ * - @google/adk: LlmAgent for ADK-compatible agents
  */
-import type { Agent } from './types.js';
-import { AgentRunner } from './runner.js';
-import { createUserProxyAgent } from './user-proxy.js';
-import { createPrimeAgent } from './prime.js';
-import { createPlanningAgent } from './planning.js';
-import { createResearchAgent } from './research.js';
-import { createGenericAgent } from './generic.js';
-import { createCodeExecutorAgent } from './code-executor.js';
-import { createChartGeneratorAgent } from './chart-generator.js';
-import { createMcpAgent } from './mcp.js';
+import type { LlmAgent } from '@google/adk';
+import { InMemoryRunner } from '@google/adk';
+import { AgentRunner, runner, runAgent, createRunner } from './runner.js';
+import { rootAgent, userProxyAgent, createUserProxyAgent } from './user-proxy.js';
+import { primeAgent } from './prime.js';
+import { planningAgent } from './planning.js';
+import { researchAgent } from './research.js';
+import { genericAgent } from './generic.js';
+import { codeExecutorAgent } from './code-executor.js';
+import { chartGeneratorAgent } from './chart-generator.js';
+import { mcpAgent } from './mcp.js';
 
+// Re-export all agents for easy access
+export {
+  rootAgent,
+  userProxyAgent,
+  primeAgent,
+  planningAgent,
+  researchAgent,
+  genericAgent,
+  codeExecutorAgent,
+  chartGeneratorAgent,
+  mcpAgent,
+};
+
+// Re-export runner utilities
+export { runner, runAgent, createRunner, AgentRunner };
+
+/**
+ * Agent hierarchy interface for backwards compatibility
+ */
 export interface AgentHierarchy {
-  rootAgent: Agent;
+  rootAgent: LlmAgent;
   runner: AgentRunner;
 }
 
+/**
+ * ADK-native agent hierarchy interface
+ */
+export interface AdkAgentHierarchy {
+  rootAgent: LlmAgent;
+  runner: InMemoryRunner;
+}
+
+/**
+ * Creates the agent hierarchy with fully initialized MCP tools
+ * This is the recommended async initialization for production use
+ *
+ * @returns AgentHierarchy with rootAgent and legacy AgentRunner
+ */
 export async function createAgentHierarchy(): Promise<AgentHierarchy> {
-  // Create specialist agents
-  const researchAgent = createResearchAgent();
-  const genericAgent = createGenericAgent();
-  const codeExecutorAgent = createCodeExecutorAgent();
-  const chartGeneratorAgent = createChartGeneratorAgent();
-
-  // MCP agent is async due to server connections
-  let mcpAgent: Agent | null = null;
-  try {
-    mcpAgent = await createMcpAgent();
-  } catch (error) {
-    console.warn('MCP agent creation failed:', error);
-  }
-
-  // Build sub-agents list
-  const subAgents: Agent[] = [
-    researchAgent,
-    genericAgent,
-    codeExecutorAgent,
-    chartGeneratorAgent,
-  ];
-
-  if (mcpAgent) {
-    subAgents.push(mcpAgent);
-  }
-
-  // Create planning agent with specialist sub-agents
-  const planningAgent = createPlanningAgent(subAgents);
-
-  // Create prime agent (router)
-  const primeAgent = createPrimeAgent(planningAgent);
-
-  // Create user proxy agent (entry point)
-  const userProxyAgent = createUserProxyAgent(primeAgent);
-
-  // Create runner
-  const runner = new AgentRunner(userProxyAgent);
+  const initializedRootAgent = await createUserProxyAgent();
+  const agentRunner = new AgentRunner(initializedRootAgent);
 
   return {
-    rootAgent: userProxyAgent,
-    runner,
+    rootAgent: initializedRootAgent,
+    runner: agentRunner,
   };
 }
 
-// Sync version for simpler use cases (without MCP)
-export function createAgentHierarchySync(): AgentHierarchy {
-  // Create specialist agents
-  const researchAgent = createResearchAgent();
-  const genericAgent = createGenericAgent();
-  const codeExecutorAgent = createCodeExecutorAgent();
-  const chartGeneratorAgent = createChartGeneratorAgent();
-
-  const subAgents: Agent[] = [
-    researchAgent,
-    genericAgent,
-    codeExecutorAgent,
-    chartGeneratorAgent,
-  ];
-
-  // Create planning agent with specialist sub-agents
-  const planningAgent = createPlanningAgent(subAgents);
-
-  // Create prime agent (router)
-  const primeAgent = createPrimeAgent(planningAgent);
-
-  // Create user proxy agent (entry point)
-  const userProxyAgent = createUserProxyAgent(primeAgent);
-
-  // Create runner
-  const runner = new AgentRunner(userProxyAgent);
+/**
+ * Creates the ADK-native agent hierarchy with InMemoryRunner
+ *
+ * @returns AdkAgentHierarchy with rootAgent and ADK InMemoryRunner
+ */
+export async function createAdkAgentHierarchy(): Promise<AdkAgentHierarchy> {
+  const initializedRootAgent = await createUserProxyAgent();
+  const adkRunner = new InMemoryRunner({
+    agent: initializedRootAgent,
+    appName: 'Solenoid',
+  });
 
   return {
-    rootAgent: userProxyAgent,
+    rootAgent: initializedRootAgent,
+    runner: adkRunner,
+  };
+}
+
+/**
+ * Synchronous version using module-level agents (without MCP initialization)
+ * Use this for simpler use cases where MCP tools are not needed
+ *
+ * @returns AgentHierarchy with rootAgent and legacy AgentRunner
+ */
+export function createAgentHierarchySync(): AgentHierarchy {
+  return {
+    rootAgent,
+    runner: new AgentRunner(rootAgent),
+  };
+}
+
+/**
+ * Gets the static module-level agent hierarchy
+ * This provides instant access but MCP tools may not be initialized
+ */
+export function getStaticHierarchy(): AdkAgentHierarchy {
+  return {
+    rootAgent,
     runner,
   };
 }
