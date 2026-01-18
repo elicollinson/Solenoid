@@ -15,11 +15,17 @@
  * - Uses structured tool calls with JSON Schema parameters
  * - Tool call data is streamed to the frontend for rendering
  * - Charts are rendered inline in the chat using ink-chart components
+ *
+ * Google ADK Compatibility:
+ * - Exports ADK-compatible FunctionTool for use with @google/adk
+ * - Maintains backward compatibility with existing BaseAgent system
  */
 import { BaseAgent } from './base-agent.js';
 import type { Agent } from './types.js';
 import { getAgentPrompt, getModelConfig, loadSettings } from '../config/index.js';
 import { renderChartToolDef, parseChartArgs } from '../charts/index.js';
+import { FunctionTool } from '@google/adk';
+import { z } from 'zod';
 
 const DEFAULT_INSTRUCTION = `You are a Chart Generator Agent specializing in terminal-based data visualizations.
 
@@ -147,3 +153,72 @@ export const chartGeneratorToolExecutors: Record<
     return `Chart rendered successfully: ${config.chartType} chart${config.title ? ` - "${config.title}"` : ''}`;
   },
 };
+
+/**
+ * Google ADK FunctionTool for chart rendering.
+ *
+ * This tool is compatible with @google/adk's LlmAgent and follows
+ * the ADK pattern of using Zod schemas for parameter validation.
+ *
+ * AG-UI Protocol: The tool returns structured data that the frontend
+ * can use to render charts inline using ink-chart components.
+ */
+export const renderChartAdkTool = new FunctionTool({
+  name: 'render_chart',
+  description: `Render a chart in the terminal UI. Supports bar charts, stacked bar charts, line graphs, and sparklines.
+
+Choose the appropriate chart type:
+- bar: For comparing values across categories
+- stackedBar: For showing composition/distribution of a whole
+- line: For showing trends over time with multiple series
+- sparkline: For compact trend visualization in a single line`,
+  parameters: z.object({
+    chartType: z.enum(['bar', 'stackedBar', 'line', 'sparkline'])
+      .describe('The type of chart to render'),
+    title: z.string().optional()
+      .describe('Optional title to display above the chart'),
+    // Bar chart parameters
+    barData: z.string().optional()
+      .describe('JSON array of bar chart data points. Each item: {label, value, color?}'),
+    barSort: z.enum(['none', 'asc', 'desc']).optional()
+      .describe('Sort order for bar charts'),
+    barShowValue: z.enum(['right', 'inside', 'none']).optional()
+      .describe('Where to show values on bar charts'),
+    // Stacked bar parameters
+    stackedData: z.string().optional()
+      .describe('JSON array of stacked bar segments. Each item: {label, value, color?}'),
+    stackedMode: z.enum(['percentage', 'absolute']).optional()
+      .describe('Display mode for stacked bar'),
+    // Line graph parameters
+    lineSeries: z.string().optional()
+      .describe('JSON array of line series. Each: {data: number[], label?, color?}'),
+    lineHeight: z.string().optional()
+      .describe('Height of line graph in rows'),
+    lineXLabels: z.string().optional()
+      .describe('JSON array of x-axis labels'),
+    // Sparkline parameters
+    sparklineData: z.string().optional()
+      .describe('JSON array of numbers for sparkline'),
+    sparklineColor: z.enum(['red', 'blue', 'green']).optional()
+      .describe('Color scheme for sparkline'),
+    sparklineMode: z.enum(['block', 'braille']).optional()
+      .describe('Rendering mode for sparkline'),
+    // General
+    width: z.string().optional()
+      .describe('Width of the chart in characters'),
+  }),
+  execute: async (params) => {
+    const result = parseChartArgs(params as Record<string, unknown>);
+    if (!result.success) {
+      return { status: 'error', error: result.error };
+    }
+    const config = result.config!;
+    return {
+      status: 'success',
+      chartType: config.chartType,
+      title: config.title,
+      // Include the full config for AG-UI frontend rendering
+      chartConfig: config,
+    };
+  },
+});

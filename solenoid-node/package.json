@@ -37,7 +37,9 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@ag-ui/core": "^0.0.43",
     "@anthropic-ai/sdk": "^0.39.0",
+    "@google/adk": "^0.2.4",
     "@google/genai": "^0.14.0",
     "@hono/node-server": "^1.19.9",
     "@hono/zod-validator": "^0.4.3",

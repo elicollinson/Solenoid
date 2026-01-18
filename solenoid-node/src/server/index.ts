@@ -5,6 +5,11 @@
  * Provides endpoints for health checks, configuration, and agent interaction.
  * Streams agent responses in real-time using Server-Sent Events.
  *
+ * AG-UI Protocol Compliance:
+ * - Uses @ag-ui/core EventType enum for event types
+ * - Streams events using AG-UI event encoder
+ * - Includes tool call arguments for frontend rendering
+ *
  * Endpoints:
  * - GET /health: Server health check
  * - GET /config: Current configuration summary
@@ -14,6 +19,7 @@
  * - hono: Lightweight web framework for edge/Node.js
  * - @hono/node-server: Node.js adapter for Hono
  * - @hono/zod-validator: Request validation using Zod schemas
+ * - @ag-ui/core: AG-UI protocol event types
  */
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
@@ -25,6 +31,18 @@ import { z } from 'zod';
 import { loadSettings } from '../config/index.js';
 import { createAgentHierarchy, createAgentHierarchySync, type AgentRunner } from '../agents/index.js';
 import { serverLogger, setupErrorHandlers } from '../utils/logger.js';
+import {
+  EventType,
+  createRunStartedEvent,
+  createRunFinishedEvent,
+  createTextMessageStartEvent,
+  createTextMessageContentEvent,
+  createTextMessageEndEvent,
+  createToolCallStartEvent,
+  createToolCallArgsEvent,
+  createToolCallEndEvent,
+  createCustomEvent,
+} from '../ag-ui/index.js';
 
 setupErrorHandlers(serverLogger);
 
@@ -129,13 +147,10 @@ app.post('/api/agent', zValidator('json', RunAgentInputSchema), async (c) => {
   }
 
   return streamSSE(c, async (stream) => {
+    // AG-UI: RUN_STARTED event
     await stream.writeSSE({
-      event: 'run_started',
-      data: JSON.stringify({
-        type: 'RUN_STARTED',
-        run_id: runId,
-        thread_id: threadId,
-      }),
+      event: EventType.RUN_STARTED.toLowerCase(),
+      data: JSON.stringify(createRunStartedEvent(runId, threadId)),
     });
 
     const messageId = crypto.randomUUID();
@@ -147,58 +162,64 @@ app.post('/api/agent', zValidator('json', RunAgentInputSchema), async (c) => {
       for await (const chunk of runner.run(lastUserMessage.content, threadId)) {
         if (chunk.type === 'text' && chunk.content) {
           if (!messageStarted) {
+            // AG-UI: TEXT_MESSAGE_START event
             await stream.writeSSE({
-              event: 'text_message_start',
-              data: JSON.stringify({
-                type: 'TEXT_MESSAGE_START',
-                message_id: messageId,
-                role: 'assistant',
-              }),
+              event: EventType.TEXT_MESSAGE_START.toLowerCase(),
+              data: JSON.stringify(createTextMessageStartEvent(messageId, 'assistant')),
             });
             messageStarted = true;
           }
 
+          // AG-UI: TEXT_MESSAGE_CONTENT event
           await stream.writeSSE({
-            event: 'text_message_content',
-            data: JSON.stringify({
-              type: 'TEXT_MESSAGE_CONTENT',
-              delta: chunk.content,
-            }),
+            event: EventType.TEXT_MESSAGE_CONTENT.toLowerCase(),
+            data: JSON.stringify(createTextMessageContentEvent(messageId, chunk.content)),
           });
         }
 
         if (chunk.type === 'tool_call' && chunk.toolCall) {
           const toolCallId = crypto.randomUUID();
+          const toolArgs = chunk.toolCall.function.arguments;
+
+          // AG-UI: TOOL_CALL_START event
           await stream.writeSSE({
-            event: 'tool_call_start',
-            data: JSON.stringify({
-              type: 'TOOL_CALL_START',
-              tool_call_id: toolCallId,
-              tool_name: chunk.toolCall.function.name,
-              // AG-UI protocol: include full arguments for frontend rendering
-              tool_args: chunk.toolCall.function.arguments,
-            }),
+            event: EventType.TOOL_CALL_START.toLowerCase(),
+            data: JSON.stringify(createToolCallStartEvent(toolCallId, chunk.toolCall.function.name, messageId)),
+          });
+
+          // AG-UI: TOOL_CALL_ARGS event - stream the full arguments
+          if (toolArgs) {
+            const argsStr = typeof toolArgs === 'string' ? toolArgs : JSON.stringify(toolArgs);
+            await stream.writeSSE({
+              event: EventType.TOOL_CALL_ARGS.toLowerCase(),
+              data: JSON.stringify(createToolCallArgsEvent(toolCallId, argsStr)),
+            });
+          }
+
+          // AG-UI: TOOL_CALL_END event
+          await stream.writeSSE({
+            event: EventType.TOOL_CALL_END.toLowerCase(),
+            data: JSON.stringify(createToolCallEndEvent(toolCallId)),
           });
         }
 
         if (chunk.type === 'transfer' && chunk.transferTo) {
+          // AG-UI: CUSTOM event for agent transfer
           await stream.writeSSE({
-            event: 'agent_transfer',
-            data: JSON.stringify({
-              type: 'AGENT_TRANSFER',
+            event: EventType.CUSTOM.toLowerCase(),
+            data: JSON.stringify(createCustomEvent('agent_transfer', {
               from_agent: 'current',
               to_agent: chunk.transferTo,
-            }),
+            })),
           });
         }
       }
 
       if (messageStarted) {
+        // AG-UI: TEXT_MESSAGE_END event
         await stream.writeSSE({
-          event: 'text_message_end',
-          data: JSON.stringify({
-            type: 'TEXT_MESSAGE_END',
-          }),
+          event: EventType.TEXT_MESSAGE_END.toLowerCase(),
+          data: JSON.stringify(createTextMessageEndEvent(messageId)),
         });
       }
     } catch (error) {
@@ -206,37 +227,26 @@ app.post('/api/agent', zValidator('json', RunAgentInputSchema), async (c) => {
 
       if (!messageStarted) {
         await stream.writeSSE({
-          event: 'text_message_start',
-          data: JSON.stringify({
-            type: 'TEXT_MESSAGE_START',
-            message_id: messageId,
-            role: 'assistant',
-          }),
+          event: EventType.TEXT_MESSAGE_START.toLowerCase(),
+          data: JSON.stringify(createTextMessageStartEvent(messageId, 'assistant')),
         });
       }
 
       await stream.writeSSE({
-        event: 'text_message_content',
-        data: JSON.stringify({
-          type: 'TEXT_MESSAGE_CONTENT',
-          delta: `Error: ${errorMessage}`,
-        }),
+        event: EventType.TEXT_MESSAGE_CONTENT.toLowerCase(),
+        data: JSON.stringify(createTextMessageContentEvent(messageId, `Error: ${errorMessage}`)),
       });
 
       await stream.writeSSE({
-        event: 'text_message_end',
-        data: JSON.stringify({
-          type: 'TEXT_MESSAGE_END',
-        }),
+        event: EventType.TEXT_MESSAGE_END.toLowerCase(),
+        data: JSON.stringify(createTextMessageEndEvent(messageId)),
       });
     }
 
+    // AG-UI: RUN_FINISHED event
     await stream.writeSSE({
-      event: 'run_finished',
-      data: JSON.stringify({
-        type: 'RUN_FINISHED',
-        run_id: runId,
-      }),
+      event: EventType.RUN_FINISHED.toLowerCase(),
+      data: JSON.stringify(createRunFinishedEvent(runId)),
     });
   });
 });
