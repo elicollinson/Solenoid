@@ -28,9 +28,9 @@ import { logger } from 'hono/logger';
 import { streamSSE } from 'hono/streaming';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { setLogLevel, LogLevel } from '@google/adk';
+import { setLogLevel, LogLevel, InMemoryRunner } from '@google/adk';
 import { loadSettings } from '../config/index.js';
-import { createAgentHierarchy, createAgentHierarchySync, type AgentRunner } from '../agents/index.js';
+import { createAdkAgentHierarchy, createUserContent } from '../agents/index.js';
 import { serverLogger, setupErrorHandlers } from '../utils/logger.js';
 import {
   EventType,
@@ -39,10 +39,6 @@ import {
   createTextMessageStartEvent,
   createTextMessageContentEvent,
   createTextMessageEndEvent,
-  createToolCallStartEvent,
-  createToolCallArgsEvent,
-  createToolCallEndEvent,
-  createCustomEvent,
 } from '../ag-ui/index.js';
 
 // Enable ADK debug logging
@@ -51,38 +47,15 @@ setLogLevel(LogLevel.DEBUG);
 setupErrorHandlers(serverLogger);
 
 const app = new Hono();
-let agentRunner: AgentRunner | null = null;
-let initPromise: Promise<void> | null = null;
+let agentRunner: InMemoryRunner | null = null;
 
 async function initializeRunner(): Promise<void> {
   if (agentRunner) return;
-  if (initPromise) return initPromise;
 
   serverLogger.info('Initializing agent runner');
-
-  initPromise = (async () => {
-    try {
-      const { runner } = await createAgentHierarchy();
-      agentRunner = runner;
-      serverLogger.info('Agent hierarchy initialized (async)');
-    } catch (error) {
-      serverLogger.warn({ error }, 'Async agent initialization failed, falling back to sync');
-      const { runner } = createAgentHierarchySync();
-      agentRunner = runner;
-      serverLogger.info('Agent hierarchy initialized (sync fallback)');
-    }
-  })();
-
-  return initPromise;
-}
-
-function getAgentRunner(): AgentRunner {
-  if (!agentRunner) {
-    // Fallback to sync if called before async init completes
-    const { runner } = createAgentHierarchySync();
-    agentRunner = runner;
-  }
-  return agentRunner;
+  const { runner } = await createAdkAgentHierarchy();
+  agentRunner = runner;
+  serverLogger.info('Agent hierarchy initialized');
 }
 
 app.use('/*', cors());
@@ -141,7 +114,7 @@ const RunAgentInputSchema = z.object({
 app.post('/api/agent', zValidator('json', RunAgentInputSchema), async (c) => {
   const input = c.req.valid('json');
   const runId = input.run_id ?? crypto.randomUUID();
-  const threadId = input.thread_id ?? crypto.randomUUID();
+  const sessionId = input.thread_id ?? crypto.randomUUID();
 
   const lastUserMessage = input.messages.findLast(
     (m: { role: string; content: string }) => m.role === 'user'
@@ -154,68 +127,57 @@ app.post('/api/agent', zValidator('json', RunAgentInputSchema), async (c) => {
     // AG-UI: RUN_STARTED event
     await stream.writeSSE({
       event: EventType.RUN_STARTED.toLowerCase(),
-      data: JSON.stringify(createRunStartedEvent(runId, threadId)),
+      data: JSON.stringify(createRunStartedEvent(runId, sessionId)),
     });
 
     const messageId = crypto.randomUUID();
     let messageStarted = false;
 
     try {
-      const runner = getAgentRunner();
+      if (!agentRunner) {
+        throw new Error('Agent runner not initialized');
+      }
 
-      for await (const chunk of runner.run(lastUserMessage.content, threadId)) {
-        if (chunk.type === 'text' && chunk.content) {
-          if (!messageStarted) {
-            // AG-UI: TEXT_MESSAGE_START event
-            await stream.writeSSE({
-              event: EventType.TEXT_MESSAGE_START.toLowerCase(),
-              data: JSON.stringify(createTextMessageStartEvent(messageId, 'assistant')),
-            });
-            messageStarted = true;
+      // Ensure session exists (create if new)
+      let session = await agentRunner.sessionService.getSession({
+        appName: 'Solenoid',
+        userId: 'user',
+        sessionId: sessionId,
+      });
+      if (!session) {
+        session = await agentRunner.sessionService.createSession({
+          appName: 'Solenoid',
+          userId: 'user',
+          sessionId: sessionId,
+        });
+      }
+
+      const message = createUserContent(lastUserMessage.content);
+
+      for await (const chunk of agentRunner.runAsync({userId: "user", sessionId: sessionId, newMessage: message})) {
+        serverLogger.info(chunk);
+
+        // Extract text content from ADK event parts
+        if (chunk.content?.parts) {
+          for (const part of chunk.content.parts) {
+            // Handle text content
+            if ('text' in part && part.text) {
+              if (!messageStarted) {
+                // AG-UI: TEXT_MESSAGE_START event
+                await stream.writeSSE({
+                  event: EventType.TEXT_MESSAGE_START.toLowerCase(),
+                  data: JSON.stringify(createTextMessageStartEvent(messageId, 'assistant')),
+                });
+                messageStarted = true;
+              }
+
+              // AG-UI: TEXT_MESSAGE_CONTENT event
+              await stream.writeSSE({
+                event: EventType.TEXT_MESSAGE_CONTENT.toLowerCase(),
+                data: JSON.stringify(createTextMessageContentEvent(messageId, part.text)),
+              });
+            }
           }
-
-          // AG-UI: TEXT_MESSAGE_CONTENT event
-          await stream.writeSSE({
-            event: EventType.TEXT_MESSAGE_CONTENT.toLowerCase(),
-            data: JSON.stringify(createTextMessageContentEvent(messageId, chunk.content)),
-          });
-        }
-
-        if (chunk.type === 'tool_call' && chunk.toolCall) {
-          const toolCallId = crypto.randomUUID();
-          const toolArgs = chunk.toolCall.function.arguments;
-
-          // AG-UI: TOOL_CALL_START event
-          await stream.writeSSE({
-            event: EventType.TOOL_CALL_START.toLowerCase(),
-            data: JSON.stringify(createToolCallStartEvent(toolCallId, chunk.toolCall.function.name, messageId)),
-          });
-
-          // AG-UI: TOOL_CALL_ARGS event - stream the full arguments
-          if (toolArgs) {
-            const argsStr = typeof toolArgs === 'string' ? toolArgs : JSON.stringify(toolArgs);
-            await stream.writeSSE({
-              event: EventType.TOOL_CALL_ARGS.toLowerCase(),
-              data: JSON.stringify(createToolCallArgsEvent(toolCallId, argsStr)),
-            });
-          }
-
-          // AG-UI: TOOL_CALL_END event
-          await stream.writeSSE({
-            event: EventType.TOOL_CALL_END.toLowerCase(),
-            data: JSON.stringify(createToolCallEndEvent(toolCallId)),
-          });
-        }
-
-        if (chunk.type === 'transfer' && chunk.transferTo) {
-          // AG-UI: CUSTOM event for agent transfer
-          await stream.writeSSE({
-            event: EventType.CUSTOM.toLowerCase(),
-            data: JSON.stringify(createCustomEvent('agent_transfer', {
-              from_agent: 'current',
-              to_agent: chunk.transferTo,
-            })),
-          });
         }
       }
 

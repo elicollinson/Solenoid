@@ -20,35 +20,8 @@ import { InMemoryRunner } from '@google/adk';
 
 // Register OllamaLlm with ADK's LLMRegistry (side-effect import)
 import '../llm/ollama-adk.js';
-import { AgentRunner, runner, runAgent, createRunner } from './runner.js';
-import { createPlanningAgent, planningAgent, rootAgent } from './planning.js';
-import { researchAgent } from './research.js';
-import { genericAgent } from './generic.js';
-import { codeExecutorAgent } from './code-executor.js';
-import { chartGeneratorAgent } from './chart-generator.js';
-import { mcpAgent } from './mcp.js';
+import { createPlanningAgent } from './planning.js';
 
-// Re-export all agents for easy access
-export {
-  rootAgent,
-  planningAgent,
-  researchAgent,
-  genericAgent,
-  codeExecutorAgent,
-  chartGeneratorAgent,
-  mcpAgent,
-};
-
-// Re-export runner utilities
-export { runner, runAgent, createRunner, AgentRunner };
-
-/**
- * Agent hierarchy interface for backwards compatibility
- */
-export interface AgentHierarchy {
-  rootAgent: LlmAgent;
-  runner: AgentRunner;
-}
 
 /**
  * ADK-native agent hierarchy interface
@@ -56,22 +29,6 @@ export interface AgentHierarchy {
 export interface AdkAgentHierarchy {
   rootAgent: LlmAgent;
   runner: InMemoryRunner;
-}
-
-/**
- * Creates the agent hierarchy with fully initialized MCP tools
- * This is the recommended async initialization for production use
- *
- * @returns AgentHierarchy with rootAgent and legacy AgentRunner
- */
-export async function createAgentHierarchy(): Promise<AgentHierarchy> {
-  const initializedRootAgent = await createPlanningAgent();
-  const agentRunner = new AgentRunner(initializedRootAgent);
-
-  return {
-    rootAgent: initializedRootAgent,
-    runner: agentRunner,
-  };
 }
 
 /**
@@ -89,29 +46,5 @@ export async function createAdkAgentHierarchy(): Promise<AdkAgentHierarchy> {
   return {
     rootAgent: initializedRootAgent,
     runner: adkRunner,
-  };
-}
-
-/**
- * Synchronous version using module-level agents (without MCP initialization)
- * Use this for simpler use cases where MCP tools are not needed
- *
- * @returns AgentHierarchy with rootAgent and legacy AgentRunner
- */
-export function createAgentHierarchySync(): AgentHierarchy {
-  return {
-    rootAgent,
-    runner: new AgentRunner(rootAgent),
-  };
-}
-
-/**
- * Gets the static module-level agent hierarchy
- * This provides instant access but MCP tools may not be initialized
- */
-export function getStaticHierarchy(): AdkAgentHierarchy {
-  return {
-    rootAgent,
-    runner,
   };
 }

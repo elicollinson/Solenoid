@@ -115,19 +115,6 @@ function getDynamicInstruction(context: InstructionContext): string {
 }
 
 /**
- * Planning LlmAgent - coordinates specialist agents for complex tasks
- * Uses static specialist agents for module-level instantiation
- */
-export const planningAgent = new LlmAgent({
-  name: 'planning_agent',
-  model: modelName,
-  description: 'Orchestrates multi-step tasks across specialist agents.',
-  instruction: getDynamicInstruction,
-  afterModelCallback: saveMemoriesOnFinalResponse,
-  subAgents: [researchAgent, genericAgent, codeExecutorAgent, chartGeneratorAgent, mcpAgent],
-});
-
-/**
  * Creates a planning agent with dynamic MCP tools
  * Use this when you need MCP tools to be fully initialized
  */
@@ -161,5 +148,3 @@ export async function createPlanningAgent(
     subAgents,
   });
 }
-
-export const rootAgent = planningAgent;

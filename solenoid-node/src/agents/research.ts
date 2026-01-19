@@ -92,19 +92,14 @@ export const researchAgent = new LlmAgent({
   afterModelCallback: saveMemoriesOnFinalResponse,
 });
 
-// Factory function for backwards compatibility
-export function createResearchAgent(): LlmAgent {
-  return researchAgent;
-}
-
-// Legacy tool executors export for backwards compatibility
-export const researchToolExecutors: Record<string, (args: Record<string, unknown>) => Promise<string>> = {
-  universal_search: async (args) => {
-    const { braveSearch } = await import('../tools/brave-search.js');
-    return braveSearch(args['query'] as string);
-  },
-  read_webpage: async (args) => {
-    const { readWebpage } = await import('../tools/web-reader.js');
-    return readWebpage(args['url'] as string);
-  },
-};
+// // Legacy tool executors export for backwards compatibility
+// export const researchToolExecutors: Record<string, (args: Record<string, unknown>) => Promise<string>> = {
+//   universal_search: async (args) => {
+//     const { braveSearch } = await import('../tools/brave-search.js');
+//     return braveSearch(args['query'] as string);
+//   },
+//   read_webpage: async (args) => {
+//     const { readWebpage } = await import('../tools/web-reader.js');
+//     return readWebpage(args['url'] as string);
+//   },
+// };

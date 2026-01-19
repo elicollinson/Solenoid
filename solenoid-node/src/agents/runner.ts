@@ -19,12 +19,14 @@ import { InMemoryRunner, isFinalResponse } from '@google/adk';
 import type { LlmAgent } from '@google/adk';
 import type { Content } from '@google/genai';
 import type { AgentStreamChunk } from './types.js';
-import { rootAgent, createUserProxyAgent } from './user-proxy.js';
+import { createPlanningAgent } from './planning.js';
 
 const APP_NAME = 'Solenoid';
 
-// Debug: Log the agent hierarchy
-function logAgentHierarchy(agent: LlmAgent, indent = 0) {
+/**
+ * Debug: Log the agent hierarchy
+ */
+export function logAgentHierarchy(agent: LlmAgent, indent = 0) {
   const prefix = '  '.repeat(indent);
   console.log(`${prefix}[Agent] ${agent.name} (model: ${agent.model})`);
   if (agent.subAgents && agent.subAgents.length > 0) {
@@ -34,23 +36,12 @@ function logAgentHierarchy(agent: LlmAgent, indent = 0) {
   }
 }
 
-console.log('[Runner] Agent hierarchy:');
-logAgentHierarchy(rootAgent);
-
-/**
- * Module-level runner using the static agent hierarchy
- */
-export const runner = new InMemoryRunner({
-  agent: rootAgent,
-  appName: APP_NAME,
-});
-
 /**
  * Creates a runner with fully initialized MCP tools
  * Use this when you need MCP tools to be fully initialized
  */
 export async function createRunner(): Promise<InMemoryRunner> {
-  const initializedRootAgent = await createUserProxyAgent();
+  const initializedRootAgent = await createPlanningAgent();
   return new InMemoryRunner({
     agent: initializedRootAgent,
     appName: APP_NAME,
@@ -60,7 +51,7 @@ export async function createRunner(): Promise<InMemoryRunner> {
 /**
  * Creates a Content object from text for use with the runner
  */
-function createUserContent(text: string): Content {
+export function createUserContent(text: string): Content {
   return {
     role: 'user',
     parts: [{ text }],
@@ -72,15 +63,15 @@ function createUserContent(text: string): Content {
  * Compatible with the existing server API
  *
  * @param input User message
+ * @param runner The InMemoryRunner to use
  * @param sessionId Optional session ID (creates new if not provided)
- * @param customRunner Optional custom runner (uses default if not provided)
  */
 export async function* runAgent(
   input: string,
-  sessionId?: string,
-  customRunner?: InMemoryRunner
+  runner: InMemoryRunner,
+  sessionId?: string
 ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-  const activeRunner = customRunner ?? runner;
+  const activeRunner = runner;
   const sid = sessionId ?? crypto.randomUUID();
 
   // Try to get existing session, or create a new one
@@ -179,9 +170,9 @@ export async function* runAgent(
 export class AgentRunner {
   private adkRunner: InMemoryRunner;
 
-  constructor(agent?: LlmAgent) {
+  constructor(agent: LlmAgent) {
     this.adkRunner = new InMemoryRunner({
-      agent: agent ?? rootAgent,
+      agent,
       appName: APP_NAME,
     });
   }
@@ -190,7 +181,7 @@ export class AgentRunner {
     input: string,
     sessionId?: string
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-    yield* runAgent(input, sessionId, this.adkRunner);
+    yield* runAgent(input, this.adkRunner, sessionId);
   }
 
   /**
