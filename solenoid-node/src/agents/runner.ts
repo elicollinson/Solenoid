@@ -20,6 +20,7 @@ import type { LlmAgent } from '@google/adk';
 import type { Content } from '@google/genai';
 import type { AgentStreamChunk } from './types.js';
 import { createPlanningAgent } from './planning.js';
+import { agentLogger } from '../utils/logger.js';
 
 const APP_NAME = 'Solenoid';
 
@@ -28,7 +29,7 @@ const APP_NAME = 'Solenoid';
  */
 export function logAgentHierarchy(agent: LlmAgent, indent = 0) {
   const prefix = '  '.repeat(indent);
-  console.log(`${prefix}[Agent] ${agent.name} (model: ${agent.model})`);
+  agentLogger.debug(`${prefix}[Agent] ${agent.name} (model: ${agent.model})`);
   if (agent.subAgents && agent.subAgents.length > 0) {
     for (const subAgent of agent.subAgents) {
       logAgentHierarchy(subAgent as LlmAgent, indent + 1);
@@ -101,12 +102,12 @@ export async function* runAgent(
       newMessage: userMessage,
     })) {
       eventIndex++;
-      console.log(`\n[Runner] ===== EVENT #${eventIndex} =====`);
-      console.log(`[Runner] Event ID: ${event.id}, from ${event.author}, parts: ${event.content?.parts?.length ?? 0}, role: ${event.content?.role}, isFinal: ${isFinalResponse(event)}, transferToAgent: ${event.actions?.transferToAgent ?? 'none'}`);
+      agentLogger.debug(`[Runner] ===== EVENT #${eventIndex} =====`);
+      agentLogger.debug(`[Runner] Event ID: ${event.id}, from ${event.author}, parts: ${event.content?.parts?.length ?? 0}, role: ${event.content?.role}, isFinal: ${isFinalResponse(event)}, transferToAgent: ${event.actions?.transferToAgent ?? 'none'}`);
 
       // Highlight if this event has a transfer action
       if (event.actions?.transferToAgent) {
-        console.log(`[Runner] *** TRANSFER DETECTED: ${event.author} -> ${event.actions.transferToAgent} ***`);
+        agentLogger.debug(`[Runner] *** TRANSFER DETECTED: ${event.author} -> ${event.actions.transferToAgent} ***`);
       }
 
       // Log what type of parts this event has
@@ -116,11 +117,11 @@ export async function* runAgent(
         if ('functionResponse' in p && p.functionResponse) return `functionResponse:${(p.functionResponse as { name?: string }).name}`;
         return `unknown(${Object.keys(p).join(',')})`;
       }).join(', ') ?? 'no parts';
-      console.log(`[Runner] Event parts: ${partTypes}`);
+      agentLogger.debug(`[Runner] Event parts: ${partTypes}`);
 
       // If this is a function response, log details
       if (event.content?.parts?.some((p) => 'functionResponse' in p)) {
-        console.log(`[Runner] Function response event detected!`);
+        agentLogger.debug(`[Runner] Function response event detected!`);
       }
 
       // Extract text content from event
@@ -129,9 +130,18 @@ export async function* runAgent(
           if (part.text) {
             yield { type: 'text', content: part.text };
           }
-          // Log tool calls with full details
+          // Yield tool calls
           if ('functionCall' in part && part.functionCall) {
-            console.log(`[Runner] Tool call: ${part.functionCall.name}, args: ${JSON.stringify(part.functionCall.args)}`);
+            agentLogger.debug(`[Runner] Tool call: ${part.functionCall.name}, args: ${JSON.stringify(part.functionCall.args)}`);
+            yield {
+              type: 'tool_call',
+              toolCall: {
+                function: {
+                  name: part.functionCall.name,
+                  arguments: part.functionCall.args as Record<string, unknown>,
+                },
+              },
+            };
           }
         }
       }
@@ -144,20 +154,20 @@ export async function* runAgent(
           (event.content?.parts?.length ?? 0) > 0 ||
           event.actions?.transferToAgent;
         if (hasContent) {
-          console.log(`[Runner] Final response received from ${event.author}`);
+          agentLogger.debug(`[Runner] Final response received from ${event.author}`);
           yield { type: 'done' };
           return;
         } else {
-          console.log(`[Runner] Skipping empty final event, continuing...`);
+          agentLogger.debug(`[Runner] Skipping empty final event, continuing...`);
           continue;
         }
       }
     }
 
-    console.log(`[Runner] Loop completed without final response`);
+    agentLogger.debug(`[Runner] Loop completed without final response`);
     yield { type: 'done' };
   } catch (error) {
-    console.error(`[Runner] Error during agent execution:`, error);
+    agentLogger.error({ error }, `[Runner] Error during agent execution`);
     yield { type: 'text', content: `Error: ${error instanceof Error ? error.message : String(error)}` };
     yield { type: 'done' };
   }

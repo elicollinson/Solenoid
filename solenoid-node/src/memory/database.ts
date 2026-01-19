@@ -10,6 +10,7 @@
  */
 import Database from 'better-sqlite3';
 import { MEMORY_SCHEMA } from './schema.js';
+import { serverLogger } from '../utils/logger.js';
 
 export function createDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
@@ -20,9 +21,7 @@ export function createDatabase(dbPath: string): Database.Database {
   try {
     db.loadExtension('vec0');
   } catch {
-    console.warn(
-      'sqlite-vec extension not found. Vector search will be disabled.'
-    );
+    serverLogger.warn('sqlite-vec extension not found. Vector search will be disabled.');
   }
 
   const statements = MEMORY_SCHEMA.split(';')
@@ -38,7 +37,7 @@ export function createDatabase(dbPath: string): Database.Database {
         !error.message.includes('already exists') &&
         !error.message.includes('no such module: vec0')
       ) {
-        console.warn(`Schema warning: ${error.message}`);
+        serverLogger.warn(`Schema warning: ${error.message}`);
       }
     }
   }

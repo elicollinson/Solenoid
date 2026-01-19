@@ -2,7 +2,7 @@
  * Main App Component
  *
  * Root React component for the terminal UI. Manages chat state, screen navigation,
- * and SSE streaming from the API server. Handles slash commands (/help, /settings,
+ * and direct ADK agent invocation. Handles slash commands (/help, /settings,
  * /clear, /agents, /quit) and keyboard shortcuts (Ctrl+C to quit).
  *
  * Dependencies:
@@ -20,26 +20,27 @@ import {
   StatusBar,
   SettingsScreen,
   HelpScreen,
+  LoadingScreen,
   type Message,
   type MessagePart,
   type ToolCall,
 } from './components/index.js';
+import { useAgent } from './hooks/index.js';
 import { loadSettings } from '../config/index.js';
 import { uiLogger } from '../utils/logger.js';
 
 type Screen = 'chat' | 'settings' | 'help';
 
-interface AppProps {
-  serverUrl?: string;
-}
-
-export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
+export function App() {
   const { exit } = useApp();
+  const agent = useAgent({
+    onInitError: (error) => uiLogger.error({ error }, 'Agent initialization failed'),
+  });
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState('Ready');
   const [screen, setScreen] = useState<Screen>('chat');
-  const [threadId] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     uiLogger.debug('App useEffect: loading settings');
@@ -151,128 +152,100 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
       ]);
 
       try {
-        const response = await fetch(`${serverUrl}/api/agent`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            thread_id: threadId,
-            messages: [{ role: 'user', content: text }],
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
-        }
-
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error('No response body');
-        }
-
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? '';
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-
-                if (data.type === 'TEXT_MESSAGE_CONTENT' && data.delta) {
-                  // Append to last text part or create new one
-                  const lastPart = parts[parts.length - 1];
-                  if (lastPart && lastPart.type === 'text') {
-                    lastPart.content += data.delta;
-                  } else {
-                    parts.push({ type: 'text', content: data.delta });
-                  }
-                  setMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === assistantMessageId
-                        ? { ...msg, content: msg.content + data.delta, parts: [...parts] }
-                        : msg
-                    )
-                  );
+        // Direct ADK invocation via hook
+        for await (const event of agent.run(text)) {
+          switch (event.type) {
+            case 'text':
+              if (event.content) {
+                // Append to last text part or create new one
+                const lastPart = parts[parts.length - 1];
+                if (lastPart && lastPart.type === 'text') {
+                  lastPart.content += event.content;
+                } else {
+                  parts.push({ type: 'text', content: event.content });
                 }
-
-                // AG-UI: TOOL_CALL_START event
-                if (data.type === 'TOOL_CALL_START' && data.toolName) {
-                  const toolCallId = data.toolCallId || crypto.randomUUID();
-                  const newToolCall: ToolCall = {
-                    id: toolCallId,
-                    name: data.toolName,
-                    status: 'running',
-                  };
-                  toolCallMap.set(toolCallId, newToolCall);
-                  parts.push({ type: 'tool_call', toolCall: newToolCall });
-                  setStatus(`Running: ${data.toolName}`);
-                  setMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === assistantMessageId
-                        ? { ...msg, parts: [...parts] }
-                        : msg
-                    )
-                  );
-                }
-
-                // AG-UI: TOOL_CALL_ARGS event - capture arguments for frontend rendering
-                if (data.type === 'TOOL_CALL_ARGS' && data.toolCallId) {
-                  const tc = toolCallMap.get(data.toolCallId);
-                  if (tc && data.delta) {
-                    // Parse the arguments JSON string
-                    try {
-                      tc.args = JSON.parse(data.delta);
-                    } catch {
-                      // If not valid JSON, store as-is (might be partial)
-                      tc.args = { raw: data.delta };
-                    }
-                    setMessages((prev) =>
-                      prev.map((msg) =>
-                        msg.id === assistantMessageId
-                          ? { ...msg, parts: [...parts] }
-                          : msg
-                      )
-                    );
-                  }
-                }
-
-                // AG-UI: TOOL_CALL_END event
-                if (data.type === 'TOOL_CALL_END' && data.toolCallId) {
-                  const tc = toolCallMap.get(data.toolCallId);
-                  if (tc) {
-                    tc.status = 'completed';
-                    setMessages((prev) =>
-                      prev.map((msg) =>
-                        msg.id === assistantMessageId
-                          ? { ...msg, parts: [...parts] }
-                          : msg
-                      )
-                    );
-                  }
-                }
-
-                // AG-UI: CUSTOM event for agent transfers
-                if (data.type === 'CUSTOM' && data.name === 'agent_transfer' && data.value?.to_agent) {
-                  setStatus(`Agent: ${data.value.to_agent}`);
-                  setMessages((prev) =>
-                    prev.map((msg) =>
-                      msg.id === assistantMessageId
-                        ? { ...msg, agentName: data.value.to_agent }
-                        : msg
-                    )
-                  );
-                }
-              } catch {
-                // Skip invalid JSON
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, content: msg.content + event.content, parts: [...parts] }
+                      : msg
+                  )
+                );
               }
-            }
+              break;
+
+            case 'tool_start':
+              if (event.toolCallId && event.toolName) {
+                const newToolCall: ToolCall = {
+                  id: event.toolCallId,
+                  name: event.toolName,
+                  status: 'running',
+                };
+                toolCallMap.set(event.toolCallId, newToolCall);
+                parts.push({ type: 'tool_call', toolCall: newToolCall });
+                setStatus(`Running: ${event.toolName}`);
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId ? { ...msg, parts: [...parts] } : msg
+                  )
+                );
+              }
+              break;
+
+            case 'tool_args':
+              if (event.toolCallId && event.toolArgs) {
+                const tc = toolCallMap.get(event.toolCallId);
+                if (tc) {
+                  try {
+                    tc.args = JSON.parse(event.toolArgs);
+                  } catch {
+                    tc.args = { raw: event.toolArgs };
+                  }
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === assistantMessageId ? { ...msg, parts: [...parts] } : msg
+                    )
+                  );
+                }
+              }
+              break;
+
+            case 'tool_end':
+              if (event.toolCallId) {
+                const tc = toolCallMap.get(event.toolCallId);
+                if (tc) {
+                  tc.status = 'completed';
+                  setMessages((prev) =>
+                    prev.map((msg) =>
+                      msg.id === assistantMessageId ? { ...msg, parts: [...parts] } : msg
+                    )
+                  );
+                }
+              }
+              break;
+
+            case 'transfer':
+              if (event.transferTo) {
+                setStatus(`Agent: ${event.transferTo}`);
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === assistantMessageId
+                      ? { ...msg, agentName: event.transferTo }
+                      : msg
+                  )
+                );
+              }
+              break;
+
+            case 'error':
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, content: `Error: ${event.error}`, isStreaming: false }
+                    : msg
+                )
+              );
+              break;
           }
         }
 
@@ -304,8 +277,17 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
         setStatus('Ready');
       }
     },
-    [serverUrl, handleSlashCommand]
+    [agent, handleSlashCommand]
   );
+
+  // Show loading screen during initialization
+  if (agent.isInitializing) {
+    return <LoadingScreen message="Initializing agents..." />;
+  }
+
+  if (agent.initError) {
+    return <LoadingScreen error={agent.initError} />;
+  }
 
   if (screen === 'settings') {
     return <SettingsScreen onClose={() => setScreen('chat')} />;
@@ -326,7 +308,7 @@ export function App({ serverUrl = 'http://localhost:8001' }: AppProps) {
         isDisabled={isLoading}
         placeholder={isLoading ? 'Waiting for response...' : 'Ask the agent... (type /help for commands)'}
       />
-      <StatusBar isLoading={isLoading} status={status} serverUrl={serverUrl} />
+      <StatusBar isLoading={isLoading} status={status} />
     </Box>
   );
 }

@@ -6,3 +6,4 @@ export { SettingsScreen } from './SettingsScreen.js';
 export { HelpScreen } from './HelpScreen.js';
 export { ChartRenderer, isChartToolCall } from './ChartRenderer.js';
 export { ChartModal } from './ChartModal.js';
+export { LoadingScreen } from './LoadingScreen.js';

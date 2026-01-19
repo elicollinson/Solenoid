@@ -28,6 +28,7 @@ interface InstructionContext {
   };
 }
 import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
+import { agentLogger } from '../utils/logger.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 
 // Import specialist agents
@@ -126,7 +127,7 @@ export async function createPlanningAgent(
   try {
     initializedMcpAgent = await createMcpAgent();
   } catch (error) {
-    console.warn('MCP agent creation failed, using placeholder:', error);
+    agentLogger.warn({ error }, 'MCP agent creation failed, using placeholder');
     initializedMcpAgent = mcpAgent;
   }
 

@@ -2,8 +2,7 @@
  * UI Entry Point
  *
  * Initializes and renders the terminal-based chat interface using Ink.
- * Connects to the API server via the SOLENOID_SERVER_URL environment variable.
- * Sets up error handlers and waits for user to exit the application.
+ * Agent initialization happens within the App component with a loading screen.
  *
  * Dependencies:
  * - ink: React for CLIs - builds terminal UIs with React components
@@ -17,11 +16,8 @@ setupErrorHandlers(uiLogger);
 
 uiLogger.info('Starting Solenoid UI');
 
-const serverUrl = process.env['SOLENOID_SERVER_URL'] ?? 'http://localhost:8001';
-uiLogger.info({ serverUrl }, 'Connecting to server');
-
 try {
-  const instance = render(<App serverUrl={serverUrl} />);
+  const instance = render(<App />);
   uiLogger.info('UI rendered successfully');
   await instance.waitUntilExit();
   uiLogger.info('UI exited normally');

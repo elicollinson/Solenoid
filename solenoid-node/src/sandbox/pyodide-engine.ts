@@ -11,6 +11,7 @@
  *   - pygal: SVG charting library (pre-installed)
  */
 import type { PyodideInterface } from 'pyodide';
+import { agentLogger } from '../utils/logger.js';
 
 export interface ExecutionResult {
   stdout: string;
@@ -40,13 +41,13 @@ export class PythonSandbox {
       try {
         await micropip.install('pygal');
       } catch {
-        console.warn('Sandbox: Failed to install pygal');
+        agentLogger.warn('Sandbox: Failed to install pygal');
       }
 
       this.initialized = true;
-      console.log('Sandbox: Pyodide initialized');
+      agentLogger.info('Sandbox: Pyodide initialized');
     } catch (error) {
-      console.warn('Sandbox: Pyodide not available:', error);
+      agentLogger.warn({ error }, 'Sandbox: Pyodide not available');
       this.initialized = true; // Mark as initialized to prevent retry
     }
   }

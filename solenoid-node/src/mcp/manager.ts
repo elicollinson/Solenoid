@@ -17,6 +17,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { ToolDefinition } from '../llm/types.js';
 import { loadSettings } from '../config/index.js';
 import type { McpServer, McpStdioServer } from '../config/schema.js';
+import { serverLogger } from '../utils/logger.js';
 
 interface McpTool {
   serverName: string;
@@ -37,7 +38,7 @@ export class McpManager {
     try {
       settings = loadSettings();
     } catch {
-      console.warn('MCP: No settings found, skipping MCP server connections');
+      serverLogger.warn('MCP: No settings found, skipping MCP server connections');
       this.initialized = true;
       return;
     }
@@ -47,7 +48,7 @@ export class McpManager {
       try {
         await this.connectServer(name, config);
       } catch (error) {
-        console.warn(`MCP: Failed to connect to ${name}:`, error);
+        serverLogger.warn({ error }, `MCP: Failed to connect to ${name}`);
       }
     }
 
@@ -91,7 +92,7 @@ export class McpManager {
       });
     }
 
-    console.log(`MCP: Connected to ${name} with ${toolsList.tools.length} tools`);
+    serverLogger.info(`MCP: Connected to ${name} with ${toolsList.tools.length} tools`);
   }
 
   private isStdioServer(config: McpServer): config is McpStdioServer {
@@ -156,7 +157,7 @@ export class McpManager {
       try {
         await client.close();
       } catch (error) {
-        console.warn(`MCP: Error closing ${name}:`, error);
+        serverLogger.warn({ error }, `MCP: Error closing ${name}`);
       }
     }
     this.clients.clear();

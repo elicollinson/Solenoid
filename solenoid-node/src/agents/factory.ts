@@ -32,6 +32,11 @@ export interface AdkAgentHierarchy {
 }
 
 /**
+ * Backwards-compatible alias for AdkAgentHierarchy
+ */
+export type AgentHierarchy = AdkAgentHierarchy;
+
+/**
  * Creates the ADK-native agent hierarchy with InMemoryRunner
  *
  * @returns AdkAgentHierarchy with rootAgent and ADK InMemoryRunner
