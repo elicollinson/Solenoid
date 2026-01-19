@@ -6,19 +6,17 @@ This module provides a high-level interface for settings operations,
 coordinating between the config loader and the validator.
 """
 
-import os
 import yaml
 import logging
 from typing import Any, Optional
 from dataclasses import dataclass
+from pathlib import Path
 
-from app.agent.config import load_settings, clear_settings_cache, _PROJECT_ROOT
+from resources.backend_config import get_settings_path
+from app.agent.config import load_settings, clear_settings_cache
 from app.settings.validator import SettingsValidator, ValidationResult
 
 LOGGER = logging.getLogger(__name__)
-
-# Default settings file path
-DEFAULT_SETTINGS_PATH = "app_settings.yaml"
 
 
 @dataclass
@@ -65,20 +63,24 @@ class SettingsManager:
     - Persist changes to disk
     """
 
-    def __init__(self, config_path: str = DEFAULT_SETTINGS_PATH):
+    def __init__(self):
         """
         Initialize the settings manager.
 
-        Args:
-            config_path: Path to the settings file (relative to project root)
+        Uses the unified settings path from backend_config, which resolves
+        to local development settings or platform-specific config directory.
         """
-        self.config_path = config_path
-        self._absolute_path = os.path.join(_PROJECT_ROOT, config_path)
+        self._settings_path: Path = get_settings_path()
+
+    @property
+    def settings_path(self) -> Path:
+        """Get the current settings file path."""
+        return self._settings_path
 
     def get_settings(self) -> dict:
         """Get the current settings, reloading from disk."""
         clear_settings_cache()
-        return load_settings(self.config_path)
+        return load_settings()
 
     def get_section_keys(self) -> list[str]:
         """Get list of available section keys from current settings."""
@@ -172,17 +174,19 @@ class SettingsManager:
         Args:
             settings: The complete settings dict to save
         """
+        settings_path = str(self._settings_path)
+        backup_path = settings_path + ".bak"
+
         # Create backup first
-        backup_path = self._absolute_path + ".bak"
-        if os.path.exists(self._absolute_path):
-            with open(self._absolute_path, 'r') as f:
+        if self._settings_path.exists():
+            with open(self._settings_path, 'r') as f:
                 backup_content = f.read()
             with open(backup_path, 'w') as f:
                 f.write(backup_content)
             LOGGER.debug(f"Created backup at {backup_path}")
 
         # Write new settings
-        with open(self._absolute_path, 'w') as f:
+        with open(self._settings_path, 'w') as f:
             yaml.dump(
                 settings,
                 f,
@@ -192,7 +196,7 @@ class SettingsManager:
                 width=120
             )
 
-        LOGGER.info(f"Saved settings to {self._absolute_path}")
+        LOGGER.info(f"Saved settings to {self._settings_path}")
 
     def restore_backup(self) -> bool:
         """
@@ -201,14 +205,14 @@ class SettingsManager:
         Returns:
             True if backup was restored, False if no backup exists
         """
-        backup_path = self._absolute_path + ".bak"
-        if not os.path.exists(backup_path):
+        backup_path = Path(str(self._settings_path) + ".bak")
+        if not backup_path.exists():
             return False
 
         with open(backup_path, 'r') as f:
             backup_content = f.read()
 
-        with open(self._absolute_path, 'w') as f:
+        with open(self._settings_path, 'w') as f:
             f.write(backup_content)
 
         clear_settings_cache()

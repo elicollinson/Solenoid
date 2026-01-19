@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "solenoid"
-version = "1.2.5"
+version = "1.2.6"
 description = "A configurable terminal application with Solarized theming and slash command support"
 readme = "README.md"
 authors = []
