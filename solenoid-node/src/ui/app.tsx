@@ -52,27 +52,26 @@ export function App() {
     }
   }, []);
 
-  // Handle keyboard shortcuts only when not typing in the chat input
-  // When on chat screen and not loading, TextInput handles all input
-  const inputActive = screen !== 'chat' || isLoading;
-
+  // Ctrl+C handler - always active for clean shutdown
   useInput(
     (char, key) => {
-      uiLogger.debug({ char, key, screen, inputActive }, 'useInput received');
-      if (screen !== 'chat') {
-        if (key.escape) {
-          uiLogger.info('Escape pressed, returning to chat');
-          setScreen('chat');
-        }
-        return;
-      }
-      // These work when loading (user might want to see they can quit)
       if (key.ctrl && char === 'c') {
         uiLogger.info('Ctrl+C pressed, exiting');
         exit();
       }
     },
-    { isActive: inputActive }
+    { isActive: true }
+  );
+
+  // Escape key handler for non-chat screens
+  useInput(
+    (_char, key) => {
+      if (key.escape) {
+        uiLogger.info('Escape pressed, returning to chat');
+        setScreen('chat');
+      }
+    },
+    { isActive: screen !== 'chat' }
   );
 
   const handleSlashCommand = useCallback(
