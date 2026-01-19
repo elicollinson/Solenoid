@@ -9,15 +9,9 @@
     "solenoid": "./dist/cli.js"
   },
   "scripts": {
-    "dev": "tsx watch --ignore './logs/**' --ignore './dist/**' src/index.ts",
-    "dev:server": "tsx watch --ignore './logs/**' --ignore './dist/**' src/server/index.ts",
-    "dev:server:quiet": "SOLENOID_QUIET=1 tsx watch --ignore './logs/**' --ignore './dist/**' src/server/index.ts",
-    "dev:ui": "tsx watch --ignore './logs/**' --ignore './dist/**' src/ui/index.tsx",
-    "start:ui": "tsx src/ui/index.tsx",
-    "start:server": "tsx src/server/index.ts",
-    "start:server:quiet": "SOLENOID_QUIET=1 tsx src/server/index.ts",
+    "dev": "tsx watch --ignore './logs/**' --ignore './dist/**' src/cli.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/cli.js",
     "test": "vitest",
     "test:run": "vitest run",
     "lint": "eslint src --ext .ts,.tsx",
