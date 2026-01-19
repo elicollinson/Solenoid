@@ -11,6 +11,7 @@
 import type { CallbackContext, LlmRequest, LlmResponse } from '@google/adk';
 import { getMemoryService, type MemoryService } from './service.js';
 import type { SearchResult } from './schema.js';
+import { agentLogger } from '../utils/logger.js';
 
 const DEFAULT_APP_NAME = 'solenoid';
 const DEFAULT_USER_ID = 'default';
@@ -68,7 +69,7 @@ export function createInjectMemoriesCallback(memoryService?: MemoryService) {
         state.set('memoryContext', memoryContext);
       }
     } catch (error) {
-      console.warn('Memory injection failed:', error);
+      agentLogger.warn({ error }, 'Memory injection failed');
     }
 
     return undefined; // Continue to model
@@ -105,7 +106,7 @@ export function createSaveMemoriesCallback(memoryService?: MemoryService) {
         importance: 2,
       });
     } catch (error) {
-      console.warn('Memory storage failed:', error);
+      agentLogger.warn({ error }, 'Memory storage failed');
     }
 
     return undefined; // Use original response

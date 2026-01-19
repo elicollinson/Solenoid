@@ -15,6 +15,7 @@ import { createDatabase, closeDatabase } from './database.js';
 import { EmbeddingsService, getEmbeddingsService } from './embeddings.js';
 import { searchMemories } from './search.js';
 import type { MemoryInput, MemoryRow, MemoryType, SearchResult } from './schema.js';
+import { serverLogger } from '../utils/logger.js';
 
 export interface MemoryServiceOptions {
   dbPath: string;
@@ -78,7 +79,7 @@ export class MemoryService {
       `);
       vecStmt.run(memId, blob, memId);
     } catch (error) {
-      console.warn('Failed to store embedding:', error);
+      serverLogger.warn({ error }, 'Failed to store embedding');
     }
 
     return memId;

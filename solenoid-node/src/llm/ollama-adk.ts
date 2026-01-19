@@ -27,6 +27,7 @@ import type {
 } from 'ollama';
 import type { BaseTool } from '@google/adk';
 import { getOllamaHost } from '../config/settings.js';
+import { agentLogger } from '../utils/logger.js';
 
 /**
  * Ollama LLM implementation for Google ADK.
@@ -91,8 +92,8 @@ export class OllamaLlm extends BaseLlm {
         }
       }
 
-      console.log(`[OllamaLlm] Calling model: ${this.actualModel}, messages: ${messages.length}, tools: ${tools.length}, stream: ${stream}`);
-      console.log(`[OllamaLlm] Available tools: ${tools.map((t) => t.function.name).join(', ') || 'none'}`);
+      agentLogger.debug(`[OllamaLlm] Calling model: ${this.actualModel}, messages: ${messages.length}, tools: ${tools.length}, stream: ${stream}`);
+      agentLogger.debug(`[OllamaLlm] Available tools: ${tools.map((t) => t.function.name).join(', ') || 'none'}`);
 
       if (stream) {
         // Streaming mode
@@ -116,32 +117,32 @@ export class OllamaLlm extends BaseLlm {
         });
 
         const toolCallCount = response.message.tool_calls?.length ?? 0;
-        console.log(`[OllamaLlm] Response received, done: ${response.done}, content length: ${response.message.content?.length ?? 0}, tool_calls: ${toolCallCount}`);
+        agentLogger.debug(`[OllamaLlm] Response received, done: ${response.done}, content length: ${response.message.content?.length ?? 0}, tool_calls: ${toolCallCount}`);
         if (response.message.tool_calls && response.message.tool_calls.length > 0) {
           for (const tc of response.message.tool_calls) {
-            console.log(`[OllamaLlm] Tool call from Ollama: ${tc.function.name}`);
-            console.log(`[OllamaLlm] Tool call args type: ${typeof tc.function.arguments}`);
-            console.log(`[OllamaLlm] Tool call args keys: ${Object.keys(tc.function.arguments || {}).join(', ')}`);
-            console.log(`[OllamaLlm] Tool call args full: ${JSON.stringify(tc.function.arguments)}`);
+            agentLogger.debug(`[OllamaLlm] Tool call from Ollama: ${tc.function.name}`);
+            agentLogger.debug(`[OllamaLlm] Tool call args type: ${typeof tc.function.arguments}`);
+            agentLogger.debug(`[OllamaLlm] Tool call args keys: ${Object.keys(tc.function.arguments || {}).join(', ')}`);
+            agentLogger.debug(`[OllamaLlm] Tool call args full: ${JSON.stringify(tc.function.arguments)}`);
           }
         }
         const llmResponse = this.convertToLlmResponse(response, false);
-        console.log(`[OllamaLlm] Yielding response with ${llmResponse.content?.parts?.length} parts, turnComplete: ${llmResponse.turnComplete}`);
+        agentLogger.debug(`[OllamaLlm] Yielding response with ${llmResponse.content?.parts?.length} parts, turnComplete: ${llmResponse.turnComplete}`);
         // Log the parts in the response
         if (llmResponse.content?.parts) {
           for (const part of llmResponse.content.parts) {
             if ('text' in part && part.text) {
-              console.log(`[OllamaLlm] Part: text (${part.text.length} chars)`);
+              agentLogger.debug(`[OllamaLlm] Part: text (${part.text.length} chars)`);
             }
             if ('functionCall' in part && part.functionCall) {
-              console.log(`[OllamaLlm] Part: functionCall: ${part.functionCall.name}, args: ${JSON.stringify(part.functionCall.args)}`);
+              agentLogger.debug(`[OllamaLlm] Part: functionCall: ${part.functionCall.name}, args: ${JSON.stringify(part.functionCall.args)}`);
             }
           }
         }
         yield llmResponse;
       }
     } catch (error) {
-      console.error(`[OllamaLlm] Error calling Ollama:`, error);
+      agentLogger.error({ error }, `[OllamaLlm] Error calling Ollama`);
       // Yield an error response so ADK can handle it
       yield {
         content: {
@@ -325,22 +326,22 @@ export class OllamaLlm extends BaseLlm {
    */
   private convertTools(toolsDict: { [key: string]: BaseTool }): OllamaTool[] {
     if (!toolsDict || Object.keys(toolsDict).length === 0) {
-      console.log(`[OllamaLlm] No tools in toolsDict`);
+      agentLogger.debug(`[OllamaLlm] No tools in toolsDict`);
       return [];
     }
 
-    console.log(`[OllamaLlm] toolsDict keys: ${Object.keys(toolsDict).join(', ')}`);
+    agentLogger.debug(`[OllamaLlm] toolsDict keys: ${Object.keys(toolsDict).join(', ')}`);
     const tools: OllamaTool[] = [];
 
     for (const [name, tool] of Object.entries(toolsDict)) {
       const declaration = tool._getDeclaration?.();
       if (!declaration) {
-        console.log(`[OllamaLlm] Tool ${name} has no declaration, skipping`);
+        agentLogger.debug(`[OllamaLlm] Tool ${name} has no declaration, skipping`);
         continue;
       }
 
-      console.log(`[OllamaLlm] Adding tool: ${declaration.name}`);
-      console.log(`[OllamaLlm] Tool ${declaration.name} parameters: ${JSON.stringify(declaration.parameters)}`);
+      agentLogger.debug(`[OllamaLlm] Adding tool: ${declaration.name}`);
+      agentLogger.debug(`[OllamaLlm] Tool ${declaration.name} parameters: ${JSON.stringify(declaration.parameters)}`);
       tools.push({
         type: 'function',
         function: {
