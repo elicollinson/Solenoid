@@ -1,1 +1,1 @@
-export { useAgent, type AgentEvent, type AgentStatus } from './useAgent.js';
+export { useAgent, type AgentEvent } from './useAgent.js';

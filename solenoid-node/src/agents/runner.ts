@@ -131,7 +131,7 @@ export async function* runAgent(
             yield { type: 'text', content: part.text };
           }
           // Yield tool calls
-          if ('functionCall' in part && part.functionCall) {
+          if ('functionCall' in part && part.functionCall?.name) {
             agentLogger.debug(`[Runner] Tool call: ${part.functionCall.name}, args: ${JSON.stringify(part.functionCall.args)}`);
             yield {
               type: 'tool_call',

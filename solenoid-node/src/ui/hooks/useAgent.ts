@@ -1,20 +1,12 @@
 /**
  * useAgent Hook
  *
- * Provides direct ADK integration for the Ink UI. Handles:
- * - Async initialization with loading state
- * - Running agents and yielding UI-compatible events
- * - Session management
+ * Provides direct ADK integration for the Ink UI using React 18 Suspense.
+ * Uses a resource pattern to suspend until MCP tools are loaded.
  */
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback } from 'react';
 import type { InMemoryRunner } from '@google/adk';
 import { createAdkAgentHierarchy, runAgent } from '../../agents/index.js';
-
-export type AgentStatus = 'initializing' | 'ready' | 'running' | 'error';
-
-export interface UseAgentOptions {
-  onInitError?: (error: Error) => void;
-}
 
 export interface AgentEvent {
   type:
@@ -25,68 +17,69 @@ export interface AgentEvent {
     | 'transfer'
     | 'done'
     | 'error';
-  // Text content
   content?: string;
-  // Tool call info
   toolCallId?: string;
   toolName?: string;
   toolArgs?: string;
-  // Transfer info
   transferTo?: string;
-  // Error
   error?: string;
 }
 
-export function useAgent(options: UseAgentOptions = {}) {
-  const [status, setStatus] = useState<AgentStatus>('initializing');
-  const [initError, setInitError] = useState<Error | null>(null);
-  const runnerRef = useRef<InMemoryRunner | null>(null);
+/**
+ * Resource wrapper for Suspense compatibility.
+ * Throws the promise while pending, returns result when resolved.
+ */
+function createResource<T>(promise: Promise<T>) {
+  let status: 'pending' | 'success' | 'error' = 'pending';
+  let result: T;
+  let error: Error;
+
+  const suspender = promise.then(
+    (r) => {
+      status = 'success';
+      result = r;
+    },
+    (e) => {
+      status = 'error';
+      error = e instanceof Error ? e : new Error(String(e));
+    }
+  );
+
+  return {
+    read(): T {
+      if (status === 'pending') throw suspender;
+      if (status === 'error') throw error;
+      return result;
+    },
+  };
+}
+
+// Singleton resource created at module level
+let agentResource: ReturnType<typeof createResource<InMemoryRunner>> | null =
+  null;
+
+function getAgentResource() {
+  if (!agentResource) {
+    agentResource = createResource(
+      createAdkAgentHierarchy().then(({ runner }) => runner)
+    );
+  }
+  return agentResource;
+}
+
+export function useAgent() {
+  // This will suspend if runner not ready
+  const runner = getAgentResource().read();
   const sessionIdRef = useRef<string>(crypto.randomUUID());
 
-  // Initialize runner on mount
-  useEffect(() => {
-    let cancelled = false;
-
-    async function init() {
-      try {
-        const { runner } = await createAdkAgentHierarchy();
-        if (!cancelled) {
-          runnerRef.current = runner;
-          setStatus('ready');
-        }
-      } catch (error) {
-        if (!cancelled) {
-          const err = error instanceof Error ? error : new Error(String(error));
-          setInitError(err);
-          setStatus('error');
-          options.onInitError?.(err);
-        }
-      }
-    }
-
-    init();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Run agent and yield events
   const run = useCallback(
     async function* (input: string): AsyncGenerator<AgentEvent, void, unknown> {
-      if (!runnerRef.current) {
-        yield { type: 'error', error: 'Agent not initialized' };
-        return;
-      }
-
-      setStatus('running');
-
       try {
         for await (const chunk of runAgent(
           input,
-          runnerRef.current,
+          runner,
           sessionIdRef.current
         )) {
-          // Transform AgentStreamChunk to AgentEvent
           switch (chunk.type) {
             case 'text':
               if (chunk.content) {
@@ -126,19 +119,10 @@ export function useAgent(options: UseAgentOptions = {}) {
           type: 'error',
           error: error instanceof Error ? error.message : String(error),
         };
-      } finally {
-        setStatus('ready');
       }
     },
-    []
+    [runner]
   );
 
-  return {
-    status,
-    initError,
-    run,
-    isInitializing: status === 'initializing',
-    isReady: status === 'ready',
-    isRunning: status === 'running',
-  };
+  return { run };
 }

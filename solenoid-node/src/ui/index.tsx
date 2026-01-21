@@ -21,26 +21,12 @@ setupErrorHandlers(uiLogger);
 
 uiLogger.info('Starting Solenoid UI');
 
-let instance: ReturnType<typeof render> | null = null;
-
-// Handle SIGINT/SIGTERM for clean shutdown (prevents tsx watch restart)
-const handleSignal = (signal: string) => {
-  uiLogger.info({ signal }, 'Received signal, shutting down');
-  if (instance) {
-    instance.unmount();
-  }
-  process.exit(0);
-};
-
-process.on('SIGINT', () => handleSignal('SIGINT'));
-process.on('SIGTERM', () => handleSignal('SIGTERM'));
-
 try {
-  // Disable Ink's default Ctrl+C handling - we handle it in App component
-  instance = render(<App />, { exitOnCtrlC: false });
+  const instance = render(<App />);
   uiLogger.info('UI rendered successfully');
   await instance.waitUntilExit();
   uiLogger.info('UI exited normally');
+  // Force exit - MCP connections and other async operations may keep process alive
   process.exit(0);
 } catch (error) {
   const err = error instanceof Error ? error : new Error(String(error));
