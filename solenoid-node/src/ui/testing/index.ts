@@ -22,6 +22,7 @@ export type {
   ToolCall,
   MessagePart,
   AgentEvent,
+  AgentInterface,
 } from './types.js';
 
 // Re-export ink-testing-library for convenience
