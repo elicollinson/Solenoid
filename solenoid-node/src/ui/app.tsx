@@ -86,7 +86,7 @@ function AppContent() {
       case "/exit":
         exit();
         return true;
-      case "/agents":
+      case "/agents": {
         const agentList: Message = {
           id: crypto.randomUUID(),
           role: "system",
@@ -99,6 +99,7 @@ function AppContent() {
         };
         setMessages((prev) => [...prev, agentList]);
         return true;
+      }
       default:
         if (command.startsWith("/")) {
           const unknownCmd: Message = {
