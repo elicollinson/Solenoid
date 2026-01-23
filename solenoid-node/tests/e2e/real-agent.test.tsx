@@ -4,10 +4,12 @@
  * This test uses the actual Ollama agent (not mocked) to verify
  * the full application flow. Requires Ollama to be running with
  * llama3.2:1b model available.
+ *
+ * These tests are SKIPPED in CI environments where Ollama isn't available.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { render } from 'ink-testing-library';
-import React, { useState, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { TextInput } from '@inkjs/ui';
 
@@ -15,6 +17,27 @@ import { TextInput } from '@inkjs/ui';
 import { createAdkAgentHierarchy, runAgent } from '../../src/agents/index.js';
 import type { InMemoryRunner } from '@google/adk';
 import type { AgentEvent } from '../../src/ui/hooks/useAgent.js';
+
+/**
+ * Check if Ollama is available by attempting to connect
+ */
+async function isOllamaAvailable(): Promise<boolean> {
+  try {
+    const response = await fetch('http://localhost:11434/api/tags', {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Check Ollama availability before running tests
+const ollamaAvailable = await isOllamaAvailable();
+if (!ollamaAvailable) {
+  console.log('Ollama not available - E2E tests will be skipped');
+}
 
 interface Message {
   id: string;
@@ -260,7 +283,7 @@ function TestAppWithRealAgent({
   );
 }
 
-describe('E2E Tests with Real Ollama Agent', () => {
+describe.skipIf(!ollamaAvailable)('E2E Tests with Real Ollama Agent', () => {
   const harness = new RealE2ETestHarness();
   let initError: Error | null = null;
 
