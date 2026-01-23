@@ -98,6 +98,42 @@ export interface AgentInterface {
 }
 
 /**
+ * Settings generation configuration for test harness
+ */
+export interface SettingsConfig {
+  /**
+   * If true, automatically generate app_settings.yaml with env vars injected.
+   * @default false
+   */
+  generateSettings?: boolean;
+
+  /**
+   * Path to write the generated settings file.
+   * @default './app_settings.yaml'
+   */
+  settingsPath?: string;
+
+  /**
+   * Base settings to merge with generated settings.
+   * Useful for overriding defaults.
+   */
+  baseSettings?: Record<string, unknown>;
+
+  /**
+   * Additional custom env var mappings.
+   * Format: { ENV_VAR_NAME: { settingsPath: ['path', 'to', 'field'], value: 'value' } }
+   */
+  additionalEnvVars?: Record<string, { settingsPath: string[]; value: string }>;
+
+  /**
+   * If true, only include values for env vars that are actually set.
+   * If false, include all default settings.
+   * @default false
+   */
+  onlySetEnvVars?: boolean;
+}
+
+/**
  * Test harness configuration
  */
 export interface TestHarnessConfig {
@@ -134,6 +170,13 @@ export interface TestHarnessConfig {
    * @default 30000
    */
   initTimeout?: number;
+
+  /**
+   * Settings generation configuration.
+   * If provided with generateSettings: true, the harness will auto-generate
+   * app_settings.yaml with secrets loaded from environment variables.
+   */
+  settings?: SettingsConfig;
 }
 
 /**
