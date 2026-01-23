@@ -266,3 +266,4 @@ entitlements.plist
 submission.md
 **/resources/models/**
 memories.db
+node_modules
