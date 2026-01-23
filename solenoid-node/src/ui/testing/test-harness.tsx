@@ -8,12 +8,15 @@
  * - Mock agent mode (default): Fast, deterministic testing with configured responses
  * - Real agent mode: E2E testing with actual Ollama agent
  * - Custom agent injection: Use any agent that implements AgentInterface
+ * - Auto-generate app_settings.yaml with secrets from environment variables
  */
 import { render } from 'ink-testing-library';
 import React, { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { TextInput } from '@inkjs/ui';
 import { MockAgent } from './mock-agent.js';
+import { writeSettingsFile, getEnvVarStatus } from '../../config/generator.js';
+import { clearSettingsCache } from '../../config/settings.js';
 import type {
   TestHarnessConfig,
   UIState,
@@ -23,6 +26,7 @@ import type {
   Message,
   AgentInterface,
   AgentEvent,
+  SettingsConfig,
 } from './types.js';
 
 /**
@@ -209,7 +213,10 @@ class RealAgentWrapper implements AgentInterface {
  * ```
  */
 export class SolenoidTestHarness {
-  private config: Required<Omit<TestHarnessConfig, 'customAgent'>> & { customAgent?: AgentInterface };
+  private config: Required<Omit<TestHarnessConfig, 'customAgent' | 'settings'>> & {
+    customAgent?: AgentInterface;
+    settings?: SettingsConfig;
+  };
   private mockAgent: MockAgent;
   private realAgent: RealAgentWrapper | null = null;
   private activeAgent: AgentInterface;
@@ -217,6 +224,7 @@ export class SolenoidTestHarness {
   private instance: ReturnType<typeof render> | null = null;
   private frameHistory: StructuredFrame[] = [];
   private disposed = false;
+  private generatedSettingsPath: string | null = null;
 
   constructor(config: TestHarnessConfig = {}) {
     this.config = {
@@ -228,6 +236,7 @@ export class SolenoidTestHarness {
       useRealAgent: config.useRealAgent ?? false,
       customAgent: config.customAgent,
       initTimeout: config.initTimeout ?? 30000,
+      settings: config.settings,
     };
 
     this.mockAgent = new MockAgent();
@@ -255,10 +264,16 @@ export class SolenoidTestHarness {
   /**
    * Start the test harness by rendering a test app.
    * For real agent mode, this will initialize the agent first.
+   * If settings generation is configured, generates app_settings.yaml first.
    */
   async start(): Promise<void> {
     if (this.disposed) {
       throw new Error('Harness has been disposed');
+    }
+
+    // Generate settings file if configured
+    if (this.config.settings?.generateSettings) {
+      this.generateSettingsFromEnv();
     }
 
     // Initialize real agent if configured
@@ -507,7 +522,54 @@ export class SolenoidTestHarness {
     this.disposed = true;
   }
 
+  /**
+   * Get the path to the generated settings file (if any)
+   */
+  getGeneratedSettingsPath(): string | null {
+    return this.generatedSettingsPath;
+  }
+
+  /**
+   * Get the status of environment variables that would be injected into settings
+   */
+  static getEnvVarStatus(): Record<string, boolean> {
+    return getEnvVarStatus();
+  }
+
   // Private helpers
+
+  /**
+   * Generate app_settings.yaml from environment variables
+   */
+  private generateSettingsFromEnv(): void {
+    const settingsConfig = this.config.settings;
+    if (!settingsConfig) return;
+
+    if (this.config.debug) {
+      const envStatus = getEnvVarStatus();
+      console.log('[TestHarness] Environment variable status:', envStatus);
+    }
+
+    try {
+      // Clear any cached settings first
+      clearSettingsCache();
+
+      this.generatedSettingsPath = writeSettingsFile({
+        outputPath: settingsConfig.settingsPath ?? './app_settings.yaml',
+        baseSettings: settingsConfig.baseSettings as Record<string, unknown> | undefined,
+        additionalEnvVars: settingsConfig.additionalEnvVars,
+        onlySetEnvVars: settingsConfig.onlySetEnvVars,
+      });
+
+      if (this.config.debug) {
+        console.log('[TestHarness] Generated settings file:', this.generatedSettingsPath);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[TestHarness] Failed to generate settings:', message);
+      throw new Error(`Failed to generate settings file: ${message}`);
+    }
+  }
 
   private createTestApp(): React.ReactElement {
     // Capture reference to activeAgent for use in component
