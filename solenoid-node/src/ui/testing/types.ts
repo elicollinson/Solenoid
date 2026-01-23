@@ -85,6 +85,19 @@ export interface MockAgentResponse {
 }
 
 /**
+ * Agent interface for test harness compatibility.
+ * Both MockAgent and real agents can implement this interface.
+ */
+export interface AgentInterface {
+  /** Run the agent with given input and yield events */
+  run(input: string): AsyncGenerator<AgentEvent, void, unknown>;
+  /** Get the event history (optional for real agents) */
+  getEventHistory?(): AgentEvent[];
+  /** Reset the agent state (optional) */
+  reset?(): void;
+}
+
+/**
  * Test harness configuration
  */
 export interface TestHarnessConfig {
@@ -102,6 +115,25 @@ export interface TestHarnessConfig {
 
   /** Enable debug logging */
   debug?: boolean;
+
+  /**
+   * Use real Ollama agent instead of mock.
+   * Requires Ollama to be running with appropriate model.
+   * @default false
+   */
+  useRealAgent?: boolean;
+
+  /**
+   * Custom agent to use instead of mock or real agent.
+   * Allows injecting any agent that implements AgentInterface.
+   */
+  customAgent?: AgentInterface;
+
+  /**
+   * Initialization timeout for real agent (ms).
+   * @default 30000
+   */
+  initTimeout?: number;
 }
 
 /**

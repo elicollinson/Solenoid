@@ -3,12 +3,17 @@
  *
  * High-level API for testing the Solenoid terminal UI.
  * Provides programmatic control over the application for integration testing.
+ *
+ * Features:
+ * - Mock agent mode (default): Fast, deterministic testing with configured responses
+ * - Real agent mode: E2E testing with actual Ollama agent
+ * - Custom agent injection: Use any agent that implements AgentInterface
  */
 import { render } from 'ink-testing-library';
 import React, { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { TextInput } from '@inkjs/ui';
-import { MockAgent, createMockUseAgent } from './mock-agent.js';
+import { MockAgent } from './mock-agent.js';
 import type {
   TestHarnessConfig,
   UIState,
@@ -16,7 +21,131 @@ import type {
   CommandResult,
   ToolCallAssertion,
   Message,
+  AgentInterface,
+  AgentEvent,
 } from './types.js';
+
+/**
+ * Wrapper for real agent that implements AgentInterface.
+ * Tracks events for testing purposes.
+ */
+class RealAgentWrapper implements AgentInterface {
+  private runner: import('@google/adk').InMemoryRunner | null = null;
+  private sessionId: string = crypto.randomUUID();
+  private eventHistory: AgentEvent[] = [];
+  private initPromise: Promise<void> | null = null;
+  private initError: Error | null = null;
+
+  async initialize(timeout: number = 30000): Promise<void> {
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = (async () => {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Agent initialization timed out after ${timeout}ms`));
+        }, timeout);
+      });
+
+      const initPromise = (async () => {
+        try {
+          // Dynamic import to avoid loading agent code when not needed
+          const { createAdkAgentHierarchy } = await import('../../agents/index.js');
+          const hierarchy = await createAdkAgentHierarchy();
+          this.runner = hierarchy.runner;
+        } catch (error) {
+          this.initError = error instanceof Error ? error : new Error(String(error));
+          throw this.initError;
+        }
+      })();
+
+      await Promise.race([initPromise, timeoutPromise]);
+    })();
+
+    return this.initPromise;
+  }
+
+  async *run(input: string): AsyncGenerator<AgentEvent, void, unknown> {
+    if (!this.runner) {
+      throw new Error('Real agent not initialized. Call initialize() first.');
+    }
+
+    try {
+      // Dynamic import for runAgent
+      const { runAgent } = await import('../../agents/index.js');
+
+      for await (const chunk of runAgent(input, this.runner, this.sessionId)) {
+        switch (chunk.type) {
+          case 'text':
+            if (chunk.content) {
+              const event: AgentEvent = { type: 'text', content: chunk.content };
+              this.eventHistory.push(event);
+              yield event;
+            }
+            break;
+          case 'tool_call':
+            if (chunk.toolCall) {
+              const toolCallId = crypto.randomUUID();
+              const startEvent: AgentEvent = {
+                type: 'tool_start',
+                toolCallId,
+                toolName: chunk.toolCall.function.name,
+              };
+              this.eventHistory.push(startEvent);
+              yield startEvent;
+
+              if (chunk.toolCall.function.arguments) {
+                const argsEvent: AgentEvent = {
+                  type: 'tool_args',
+                  toolCallId,
+                  toolArgs: JSON.stringify(chunk.toolCall.function.arguments),
+                };
+                this.eventHistory.push(argsEvent);
+                yield argsEvent;
+              }
+
+              const endEvent: AgentEvent = { type: 'tool_end', toolCallId };
+              this.eventHistory.push(endEvent);
+              yield endEvent;
+            }
+            break;
+          case 'transfer':
+            if (chunk.transferTo) {
+              const event: AgentEvent = { type: 'transfer', transferTo: chunk.transferTo };
+              this.eventHistory.push(event);
+              yield event;
+            }
+            break;
+          case 'done': {
+            const doneEvent: AgentEvent = { type: 'done' };
+            this.eventHistory.push(doneEvent);
+            yield doneEvent;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      const errorEvent: AgentEvent = {
+        type: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      };
+      this.eventHistory.push(errorEvent);
+      yield errorEvent;
+    }
+  }
+
+  getEventHistory(): AgentEvent[] {
+    return [...this.eventHistory];
+  }
+
+  reset(): void {
+    this.eventHistory = [];
+    this.sessionId = crypto.randomUUID();
+  }
+
+  getInitError(): Error | null {
+    return this.initError;
+  }
+}
 
 /**
  * SolenoidTestHarness provides a high-level API for testing the terminal UI.
@@ -27,8 +156,9 @@ import type {
  * - Event capture and validation
  * - Snapshot testing support
  * - Async operation handling
+ * - Support for mock, real, or custom agents
  *
- * @example
+ * @example Mock agent mode (default):
  * ```typescript
  * const harness = new SolenoidTestHarness({
  *   responses: {
@@ -44,10 +174,46 @@ import type {
  *
  * harness.dispose();
  * ```
+ *
+ * @example Real agent mode (E2E testing):
+ * ```typescript
+ * const harness = new SolenoidTestHarness({
+ *   useRealAgent: true,
+ *   initTimeout: 60000,
+ *   timeout: 120000,
+ * });
+ *
+ * await harness.start(); // Will initialize real Ollama agent
+ * const result = await harness.sendMessage('What is 2+2?');
+ *
+ * expect(harness.getCurrentFrame().containsText('4')).toBe(true);
+ *
+ * harness.dispose();
+ * ```
+ *
+ * @example Custom agent injection:
+ * ```typescript
+ * const customAgent: AgentInterface = {
+ *   async *run(input) {
+ *     yield { type: 'text', content: `Custom response to: ${input}` };
+ *     yield { type: 'done' };
+ *   },
+ * };
+ *
+ * const harness = new SolenoidTestHarness({
+ *   customAgent,
+ * });
+ *
+ * await harness.start();
+ * await harness.sendMessage('test');
+ * ```
  */
 export class SolenoidTestHarness {
-  private config: Required<TestHarnessConfig>;
+  private config: Required<Omit<TestHarnessConfig, 'customAgent'>> & { customAgent?: AgentInterface };
   private mockAgent: MockAgent;
+  private realAgent: RealAgentWrapper | null = null;
+  private activeAgent: AgentInterface;
+  private eventHistory: AgentEvent[] = [];
   private instance: ReturnType<typeof render> | null = null;
   private frameHistory: StructuredFrame[] = [];
   private disposed = false;
@@ -59,6 +225,9 @@ export class SolenoidTestHarness {
       initialScreen: config.initialScreen ?? 'chat',
       timeout: config.timeout ?? 5000,
       debug: config.debug ?? false,
+      useRealAgent: config.useRealAgent ?? false,
+      customAgent: config.customAgent,
+      initTimeout: config.initTimeout ?? 30000,
     };
 
     this.mockAgent = new MockAgent();
@@ -71,15 +240,36 @@ export class SolenoidTestHarness {
         this.mockAgent.setResponse(pattern, response);
       }
     }
+
+    // Determine which agent to use
+    if (this.config.customAgent) {
+      this.activeAgent = this.config.customAgent;
+    } else if (this.config.useRealAgent) {
+      this.realAgent = new RealAgentWrapper();
+      this.activeAgent = this.realAgent;
+    } else {
+      this.activeAgent = this.mockAgent;
+    }
   }
 
   /**
-   * Start the test harness by rendering a test app with mocked dependencies.
-   * This renders a simplified version of the app suitable for testing.
+   * Start the test harness by rendering a test app.
+   * For real agent mode, this will initialize the agent first.
    */
   async start(): Promise<void> {
     if (this.disposed) {
       throw new Error('Harness has been disposed');
+    }
+
+    // Initialize real agent if configured
+    if (this.realAgent) {
+      if (this.config.debug) {
+        console.log('[TestHarness] Initializing real agent...');
+      }
+      await this.realAgent.initialize(this.config.initTimeout);
+      if (this.config.debug) {
+        console.log('[TestHarness] Real agent initialized');
+      }
     }
 
     // Create a simple test component that mimics the app behavior
@@ -172,10 +362,46 @@ export class SolenoidTestHarness {
   }
 
   /**
-   * Get the mock agent for inspection
+   * Get the mock agent for inspection (only available in mock mode)
    */
   getMockAgent(): MockAgent {
     return this.mockAgent;
+  }
+
+  /**
+   * Get the active agent (mock, real, or custom)
+   */
+  getActiveAgent(): AgentInterface {
+    return this.activeAgent;
+  }
+
+  /**
+   * Get all events captured during testing
+   */
+  getEventHistory(): AgentEvent[] {
+    // First check internal event history (for custom agents)
+    if (this.eventHistory.length > 0) {
+      return [...this.eventHistory];
+    }
+    // Then try the agent's event history if available
+    if (this.activeAgent.getEventHistory) {
+      return this.activeAgent.getEventHistory();
+    }
+    return [];
+  }
+
+  /**
+   * Check if harness is using real agent mode
+   */
+  isUsingRealAgent(): boolean {
+    return this.realAgent !== null && this.activeAgent === this.realAgent;
+  }
+
+  /**
+   * Check if harness is using custom agent
+   */
+  isUsingCustomAgent(): boolean {
+    return this.config.customAgent !== undefined;
   }
 
   /**
@@ -220,7 +446,7 @@ export class SolenoidTestHarness {
    * Assert tool call states
    */
   assertToolCalls(assertions: ToolCallAssertion[]): void {
-    const events = this.mockAgent.getEventHistory();
+    const events = this.getEventHistory();
 
     for (const assertion of assertions) {
       const startEvent = events.find(
@@ -270,6 +496,13 @@ export class SolenoidTestHarness {
       this.instance = null;
     }
     this.mockAgent.reset();
+    if (this.realAgent) {
+      this.realAgent.reset();
+    }
+    if (this.activeAgent.reset) {
+      this.activeAgent.reset();
+    }
+    this.eventHistory = [];
     this.frameHistory = [];
     this.disposed = true;
   }
@@ -277,12 +510,14 @@ export class SolenoidTestHarness {
   // Private helpers
 
   private createTestApp(): React.ReactElement {
-    const mockUseAgent = createMockUseAgent(this.mockAgent);
+    // Capture reference to activeAgent for use in component
+    const activeAgent = this.activeAgent;
+    const eventHistory = this.eventHistory;
     const initialMessages = this.config.initialMessages;
+    const debug = this.config.debug;
 
     // Simple test app component
     const TestApp = () => {
-      const agent = mockUseAgent();
       const [messages, setMessages] = useState<Message[]>(initialMessages);
       const [isProcessing, setIsProcessing] = useState(false);
       const [status, setStatus] = useState('Ready');
@@ -357,28 +592,52 @@ export class SolenoidTestHarness {
             },
           ]);
 
-          for await (const event of agent.run(trimmed)) {
-            if (event.type === 'text' && event.content) {
-              content += event.content;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId ? { ...m, content } : m
-                )
-              );
-            } else if (event.type === 'error') {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? {
-                        ...m,
-                        content: `Error: ${event.error}`,
-                        isStreaming: false,
-                      }
-                    : m
-                )
-              );
-              break;
+          try {
+            for await (const event of activeAgent.run(trimmed)) {
+              // Track events for custom agents that don't have their own tracking
+              if (!activeAgent.getEventHistory) {
+                eventHistory.push(event);
+              }
+
+              if (debug) {
+                console.log('[TestHarness] Event:', event.type);
+              }
+
+              if (event.type === 'text' && event.content) {
+                content += event.content;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId ? { ...m, content } : m
+                  )
+                );
+              } else if (event.type === 'error') {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? {
+                          ...m,
+                          content: `Error: ${event.error}`,
+                          isStreaming: false,
+                        }
+                      : m
+                  )
+                );
+                break;
+              }
             }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      content: `Error: ${errorMessage}`,
+                      isStreaming: false,
+                    }
+                  : m
+              )
+            );
           }
 
           setMessages((prev) =>
@@ -389,7 +648,7 @@ export class SolenoidTestHarness {
           setIsProcessing(false);
           setStatus('Ready');
         },
-        [agent]
+        []
       );
 
       return (
