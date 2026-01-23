@@ -13,7 +13,7 @@ import { render } from 'ink-testing-library';
 import React, { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { TextInput } from '@inkjs/ui';
-import { MockAgent, createMockUseAgent } from './mock-agent.js';
+import { MockAgent } from './mock-agent.js';
 import type {
   TestHarnessConfig,
   UIState,
@@ -39,24 +39,27 @@ class RealAgentWrapper implements AgentInterface {
   async initialize(timeout: number = 30000): Promise<void> {
     if (this.initPromise) return this.initPromise;
 
-    this.initPromise = new Promise(async (resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        reject(new Error(`Agent initialization timed out after ${timeout}ms`));
-      }, timeout);
+    this.initPromise = (async () => {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Agent initialization timed out after ${timeout}ms`));
+        }, timeout);
+      });
 
-      try {
-        // Dynamic import to avoid loading agent code when not needed
-        const { createAdkAgentHierarchy } = await import('../../agents/index.js');
-        const hierarchy = await createAdkAgentHierarchy();
-        this.runner = hierarchy.runner;
-        clearTimeout(timeoutId);
-        resolve();
-      } catch (error) {
-        clearTimeout(timeoutId);
-        this.initError = error instanceof Error ? error : new Error(String(error));
-        reject(this.initError);
-      }
-    });
+      const initPromise = (async () => {
+        try {
+          // Dynamic import to avoid loading agent code when not needed
+          const { createAdkAgentHierarchy } = await import('../../agents/index.js');
+          const hierarchy = await createAdkAgentHierarchy();
+          this.runner = hierarchy.runner;
+        } catch (error) {
+          this.initError = error instanceof Error ? error : new Error(String(error));
+          throw this.initError;
+        }
+      })();
+
+      await Promise.race([initPromise, timeoutPromise]);
+    })();
 
     return this.initPromise;
   }
@@ -112,11 +115,12 @@ class RealAgentWrapper implements AgentInterface {
               yield event;
             }
             break;
-          case 'done':
+          case 'done': {
             const doneEvent: AgentEvent = { type: 'done' };
             this.eventHistory.push(doneEvent);
             yield doneEvent;
             break;
+          }
         }
       }
     } catch (error) {
