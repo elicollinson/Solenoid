@@ -7,7 +7,7 @@
  * component doesn't fully support stdin.write() in ink-testing-library.
  * Use the SolenoidTestHarness for integration tests of input behavior.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, mock } from 'bun:test';
 import { render } from 'ink-testing-library';
 import React from 'react';
 import { ChatInput } from '../../../../src/ui/components/ChatInput.js';
@@ -37,7 +37,7 @@ describe('ChatInput', () => {
   // Note: @inkjs/ui TextInput doesn't propagate stdin.write to onSubmit in tests
   // These behaviors are tested through the SolenoidTestHarness integration tests
   it.skip('calls onSubmit with text when Enter is pressed', async () => {
-    const onSubmit = vi.fn();
+    const onSubmit = mock(() => {});
     const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
 
     stdin.write('Hello world');
@@ -49,7 +49,7 @@ describe('ChatInput', () => {
   });
 
   it.skip('trims whitespace before submitting', async () => {
-    const onSubmit = vi.fn();
+    const onSubmit = mock(() => {});
     const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
 
     stdin.write('  Hello world  ');
@@ -61,7 +61,7 @@ describe('ChatInput', () => {
   });
 
   it('does not call onSubmit for empty input', async () => {
-    const onSubmit = vi.fn();
+    const onSubmit = mock(() => {});
     const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
 
     // Press Enter without typing - empty submit shouldn't trigger callback
@@ -72,7 +72,7 @@ describe('ChatInput', () => {
   });
 
   it('does not call onSubmit for whitespace-only input', async () => {
-    const onSubmit = vi.fn();
+    const onSubmit = mock(() => {});
     const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
 
     stdin.write('   ');
@@ -93,7 +93,7 @@ describe('ChatInput', () => {
   });
 
   it('does not submit when disabled', async () => {
-    const onSubmit = vi.fn();
+    const onSubmit = mock(() => {});
     const { stdin } = render(
       <ChatInput onSubmit={onSubmit} isDisabled={true} />
     );
@@ -108,7 +108,7 @@ describe('ChatInput', () => {
   });
 
   it.skip('clears input after submission', async () => {
-    const onSubmit = vi.fn();
+    const onSubmit = mock(() => {});
     const { stdin, lastFrame } = render(<ChatInput onSubmit={onSubmit} />);
 
     stdin.write('Test message');
@@ -121,7 +121,7 @@ describe('ChatInput', () => {
   });
 
   it.skip('handles multiple submissions correctly', async () => {
-    const onSubmit = vi.fn();
+    const onSubmit = mock(() => {});
     const { stdin } = render(<ChatInput onSubmit={onSubmit} />);
 
     stdin.write('First message');

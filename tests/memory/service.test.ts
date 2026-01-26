@@ -1,54 +1,69 @@
-import { describe, it, expect, vi } from 'vitest';
-import { EmbeddingsService } from '../../src/memory/embeddings.js';
+import { describe, it, expect, mock } from 'bun:test';
 
-// Test the embeddings service interface (mocked)
-vi.mock('../../src/memory/embeddings.js', () => ({
+// Mock the embeddings service
+mock.module('../../src/memory/embeddings.js', () => ({
   EmbeddingsService: class MockEmbeddingsService {
-    initialized = false;
-    model: string;
-    host: string;
+    private model: string;
+    private host: string;
 
     constructor(host: string, model: string) {
       this.host = host;
       this.model = model;
     }
 
-    async initialize() {
-      this.initialized = true;
-    }
-
-    async getEmbedding(text: string): Promise<number[]> {
-      // Simple hash-based mock embedding (384 dimensions)
-      const embedding = new Array(384).fill(0);
-      for (let i = 0; i < text.length && i < 384; i++) {
+    async embedQuery(text: string): Promise<Float32Array> {
+      const embedding = new Array(256).fill(0);
+      for (let i = 0; i < text.length && i < 256; i++) {
         embedding[i] = text.charCodeAt(i) / 256;
       }
-      return embedding;
+      return new Float32Array(embedding);
+    }
+
+    async embedDocument(text: string): Promise<Float32Array> {
+      return this.embedQuery(text);
+    }
+
+    toBlob(vec: Float32Array): Buffer {
+      return Buffer.from(vec.buffer);
     }
   },
-  getEmbeddingsService: vi.fn((host: string, model: string) => {
-    return new (vi.mocked(EmbeddingsService) as any)(host, model);
+  getEmbeddingsService: () => ({
+    async embedQuery(text: string): Promise<Float32Array> {
+      const embedding = new Array(256).fill(0);
+      for (let i = 0; i < text.length && i < 256; i++) {
+        embedding[i] = text.charCodeAt(i) / 256;
+      }
+      return new Float32Array(embedding);
+    },
+    async embedDocument(text: string): Promise<Float32Array> {
+      const embedding = new Array(256).fill(0);
+      for (let i = 0; i < text.length && i < 256; i++) {
+        embedding[i] = text.charCodeAt(i) / 256;
+      }
+      return new Float32Array(embedding);
+    },
+    toBlob(vec: Float32Array): Buffer {
+      return Buffer.from(vec.buffer);
+    },
   }),
 }));
 
 describe('EmbeddingsService (mocked)', () => {
-  it('should create embeddings service with host and model', async () => {
+  it('should create embeddings service', async () => {
     const { getEmbeddingsService } = await import('../../src/memory/embeddings.js');
     const service = getEmbeddingsService('http://localhost:11434', 'nomic-embed-text');
 
     expect(service).toBeDefined();
-    expect(service.host).toBe('http://localhost:11434');
-    expect(service.model).toBe('nomic-embed-text');
+    expect(typeof service.embedQuery).toBe('function');
   });
 
   it('should generate embeddings', async () => {
     const { getEmbeddingsService } = await import('../../src/memory/embeddings.js');
     const service = getEmbeddingsService('http://localhost:11434', 'nomic-embed-text');
-    await service.initialize();
 
-    const embedding = await service.getEmbedding('test text');
-    expect(Array.isArray(embedding)).toBe(true);
-    expect(embedding.length).toBe(384);
+    const embedding = await service.embedQuery('test text');
+    expect(embedding).toBeInstanceOf(Float32Array);
+    expect(embedding.length).toBe(256);
   });
 });
 

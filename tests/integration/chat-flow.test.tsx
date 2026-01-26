@@ -3,7 +3,7 @@
  *
  * Tests for the full chat interaction flow in the Solenoid terminal UI.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { SolenoidTestHarness } from '../../src/ui/testing/index.js';
 
 describe('Chat Flow', () => {
@@ -124,7 +124,7 @@ describe('Chat Flow', () => {
     expect(doneEvents.length).toBe(1);
 
     // Done should be last
-    expect(events[events.length - 1].type).toBe('done');
+    expect(events.at(-1)?.type).toBe('done');
   });
 
   it('empty messages are not sent', async () => {

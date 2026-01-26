@@ -10,7 +10,7 @@
  * - episodic: Conversation history and interactions
  * - semantic: Extracted knowledge and learned concepts
  */
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import { createDatabase, closeDatabase } from './database.js';
 import { EmbeddingsService, getEmbeddingsService } from './embeddings.js';
 import { searchMemories } from './search.js';
@@ -28,7 +28,7 @@ export interface MemoryServiceOptions {
 }
 
 export class MemoryService {
-  private db: Database.Database;
+  private db: Database;
   private embedder: EmbeddingsService;
   private options: Required<Omit<MemoryServiceOptions, 'dbPath'>>;
 

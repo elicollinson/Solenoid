@@ -7,7 +7,7 @@
  * ink-testing-library stdin doesn't reliably trigger useInput callbacks.
  * Key handling is tested through the SolenoidTestHarness integration tests.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, mock } from 'bun:test';
 import { render } from 'ink-testing-library';
 import React from 'react';
 import { HelpScreen } from '../../../../src/ui/components/HelpScreen.js';
@@ -60,7 +60,7 @@ describe('HelpScreen', () => {
   // Note: useInput doesn't receive stdin events reliably in ink-testing-library
   // These behaviors are tested through the actual app with manual testing
   it.skip('calls onClose when Enter is pressed', async () => {
-    const onClose = vi.fn();
+    const onClose = mock(() => {});
     const { stdin } = render(<HelpScreen onClose={onClose} />);
 
     stdin.write('\r');
@@ -70,7 +70,7 @@ describe('HelpScreen', () => {
   });
 
   it.skip('calls onClose when Escape is pressed', async () => {
-    const onClose = vi.fn();
+    const onClose = mock(() => {});
     const { stdin } = render(<HelpScreen onClose={onClose} />);
 
     stdin.write('\x1B');
@@ -80,7 +80,7 @@ describe('HelpScreen', () => {
   });
 
   it('does not call onClose for other keys', async () => {
-    const onClose = vi.fn();
+    const onClose = mock(() => {});
     const { stdin } = render(<HelpScreen onClose={onClose} />);
 
     // Type a regular character

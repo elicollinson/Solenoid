@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, unlinkSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
@@ -13,13 +13,37 @@ import {
 describe('Config Generator', () => {
   const testOutputPath = resolve(process.cwd(), '.test-settings.yaml');
 
+  // Store original env vars
+  const originalEnv: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    // Save and clear env vars
+    originalEnv['BRAVE_SEARCH_API_KEY'] = process.env['BRAVE_SEARCH_API_KEY'];
+    originalEnv['GOOGLE_API_KEY'] = process.env['GOOGLE_API_KEY'];
+    originalEnv['GOOGLE_CX'] = process.env['GOOGLE_CX'];
+    originalEnv['OLLAMA_HOST'] = process.env['OLLAMA_HOST'];
+    originalEnv['MY_CUSTOM_KEY'] = process.env['MY_CUSTOM_KEY'];
+
+    delete process.env['BRAVE_SEARCH_API_KEY'];
+    delete process.env['GOOGLE_API_KEY'];
+    delete process.env['GOOGLE_CX'];
+    delete process.env['OLLAMA_HOST'];
+    delete process.env['MY_CUSTOM_KEY'];
+  });
+
   // Clean up test file after each test
   afterEach(() => {
     if (existsSync(testOutputPath)) {
       unlinkSync(testOutputPath);
     }
-    // Reset environment variables
-    vi.unstubAllEnvs();
+    // Restore original environment variables
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   });
 
   describe('getDefaultSettings', () => {
@@ -59,7 +83,7 @@ describe('Config Generator', () => {
     });
 
     it('should detect when env var is set', () => {
-      vi.stubEnv('BRAVE_SEARCH_API_KEY', 'test-key-123');
+      process.env['BRAVE_SEARCH_API_KEY'] = 'test-key-123';
 
       const status = getEnvVarStatus();
 
@@ -76,7 +100,7 @@ describe('Config Generator', () => {
     });
 
     it('should treat empty string as not set', () => {
-      vi.stubEnv('BRAVE_SEARCH_API_KEY', '');
+      process.env['BRAVE_SEARCH_API_KEY'] = '';
 
       const status = getEnvVarStatus();
 
@@ -85,14 +109,6 @@ describe('Config Generator', () => {
   });
 
   describe('generateSettings', () => {
-    beforeEach(() => {
-      // Clear any existing env vars that might interfere
-      delete process.env['BRAVE_SEARCH_API_KEY'];
-      delete process.env['GOOGLE_API_KEY'];
-      delete process.env['GOOGLE_CX'];
-      delete process.env['OLLAMA_HOST'];
-    });
-
     it('should generate default settings when no env vars are set', () => {
       const settings = generateSettings();
 
@@ -101,7 +117,7 @@ describe('Config Generator', () => {
     });
 
     it('should inject BRAVE_SEARCH_API_KEY from env', () => {
-      vi.stubEnv('BRAVE_SEARCH_API_KEY', 'my-brave-api-key');
+      process.env['BRAVE_SEARCH_API_KEY'] = 'my-brave-api-key';
 
       const settings = generateSettings();
 
@@ -109,7 +125,7 @@ describe('Config Generator', () => {
     });
 
     it('should inject OLLAMA_HOST from env', () => {
-      vi.stubEnv('OLLAMA_HOST', 'http://custom-ollama:11434');
+      process.env['OLLAMA_HOST'] = 'http://custom-ollama:11434';
 
       const settings = generateSettings();
 
@@ -117,10 +133,10 @@ describe('Config Generator', () => {
     });
 
     it('should inject multiple env vars', () => {
-      vi.stubEnv('BRAVE_SEARCH_API_KEY', 'brave-key');
-      vi.stubEnv('GOOGLE_API_KEY', 'google-key');
-      vi.stubEnv('GOOGLE_CX', 'google-cx-id');
-      vi.stubEnv('OLLAMA_HOST', 'http://remote:11434');
+      process.env['BRAVE_SEARCH_API_KEY'] = 'brave-key';
+      process.env['GOOGLE_API_KEY'] = 'google-key';
+      process.env['GOOGLE_CX'] = 'google-cx-id';
+      process.env['OLLAMA_HOST'] = 'http://remote:11434';
 
       const settings = generateSettings();
 
@@ -137,7 +153,7 @@ describe('Config Generator', () => {
         },
       };
 
-      vi.stubEnv('GOOGLE_API_KEY', 'google-key');
+      process.env['GOOGLE_API_KEY'] = 'google-key';
 
       const settings = generateSettings({ baseSettings });
 
@@ -148,7 +164,7 @@ describe('Config Generator', () => {
     });
 
     it('should support custom env mappings', () => {
-      vi.stubEnv('MY_CUSTOM_KEY', 'custom-value');
+      process.env['MY_CUSTOM_KEY'] = 'custom-value';
 
       const settings = generateSettings({
         envMappings: [{ envVar: 'MY_CUSTOM_KEY', settingsPath: ['search', 'brave_search_api_key'] }],
@@ -168,7 +184,7 @@ describe('Config Generator', () => {
     });
 
     it('should use onlySetEnvVars mode', () => {
-      vi.stubEnv('BRAVE_SEARCH_API_KEY', 'only-this');
+      process.env['BRAVE_SEARCH_API_KEY'] = 'only-this';
 
       const settings = generateSettings({ onlySetEnvVars: true });
 
@@ -180,10 +196,6 @@ describe('Config Generator', () => {
   });
 
   describe('writeSettingsFile', () => {
-    beforeEach(() => {
-      delete process.env['BRAVE_SEARCH_API_KEY'];
-    });
-
     it('should write settings to file', () => {
       writeSettingsFile({ outputPath: testOutputPath });
 
@@ -202,7 +214,7 @@ describe('Config Generator', () => {
     });
 
     it('should inject env vars into written file', () => {
-      vi.stubEnv('BRAVE_SEARCH_API_KEY', 'file-test-key');
+      process.env['BRAVE_SEARCH_API_KEY'] = 'file-test-key';
 
       writeSettingsFile({ outputPath: testOutputPath });
 
@@ -220,11 +232,11 @@ describe('Config Generator', () => {
 
     it('should not overwrite if overwrite is false and file exists', () => {
       // Write first time
-      vi.stubEnv('BRAVE_SEARCH_API_KEY', 'first-key');
+      process.env['BRAVE_SEARCH_API_KEY'] = 'first-key';
       writeSettingsFile({ outputPath: testOutputPath });
 
       // Try to write again with different key
-      vi.stubEnv('BRAVE_SEARCH_API_KEY', 'second-key');
+      process.env['BRAVE_SEARCH_API_KEY'] = 'second-key';
       writeSettingsFile({ outputPath: testOutputPath, overwrite: false });
 
       // Should still have first key
@@ -236,11 +248,11 @@ describe('Config Generator', () => {
 
     it('should overwrite by default', () => {
       // Write first time
-      vi.stubEnv('BRAVE_SEARCH_API_KEY', 'first-key');
+      process.env['BRAVE_SEARCH_API_KEY'] = 'first-key';
       writeSettingsFile({ outputPath: testOutputPath });
 
       // Write again with different key
-      vi.stubEnv('BRAVE_SEARCH_API_KEY', 'second-key');
+      process.env['BRAVE_SEARCH_API_KEY'] = 'second-key';
       writeSettingsFile({ outputPath: testOutputPath });
 
       // Should have second key

@@ -7,3 +7,5 @@
 console.log('Solenoid v2.0.0-alpha.1');
 
 await import('./ui/index.js');
+
+export {};

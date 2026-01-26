@@ -3,7 +3,7 @@
  *
  * Tests for tool call state transitions and event handling.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { SolenoidTestHarness } from '../../src/ui/testing/index.js';
 
 describe('Tool Call Lifecycle', () => {

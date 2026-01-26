@@ -8,7 +8,7 @@
  *
  * Real agent tests are SKIPPED in CI environments where Ollama isn't available.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import {
   SolenoidTestHarness,
   type AgentInterface,
@@ -171,9 +171,6 @@ describe.skipIf(!ollamaAvailable)('Enhanced Test Harness - Real Agent Mode', () 
   let initError: Error | null = null;
 
   beforeAll(async () => {
-    // Set longer timeout for agent initialization
-    vi.setConfig({ testTimeout: 180000 });
-
     harness = new SolenoidTestHarness({
       useRealAgent: true,
       initTimeout: 60000,
@@ -187,7 +184,7 @@ describe.skipIf(!ollamaAvailable)('Enhanced Test Harness - Real Agent Mode', () 
       initError = error instanceof Error ? error : new Error(String(error));
       console.log('Real agent initialization error:', initError.message);
     }
-  }, 120000);
+  });
 
   afterAll(() => {
     if (harness) {

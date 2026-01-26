@@ -3,7 +3,7 @@
  *
  * Tests for slash command handling in the Solenoid terminal UI.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { SolenoidTestHarness } from '../../src/ui/testing/index.js';
 
 describe('Slash Commands', () => {
