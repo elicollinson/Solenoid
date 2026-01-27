@@ -28,11 +28,14 @@ export interface ToolDefinition {
     description: string;
     parameters: {
       type: 'object';
-      properties: Record<string, {
-        type: string;
-        description: string;
-        enum?: string[];
-      }>;
+      properties: Record<
+        string,
+        {
+          type: string;
+          description: string;
+          enum?: string[];
+        }
+      >;
       required?: string[];
     };
   };
@@ -71,4 +74,4 @@ export interface LLMProvider {
   chatStream(options: ChatOptions): ChatStreamResponse;
 }
 
-export { OllamaTool };
+export type { OllamaTool };

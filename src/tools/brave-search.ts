@@ -56,7 +56,7 @@ export async function braveSearch(query: string): Promise<string> {
 }
 
 function getApiKey(): string | undefined {
-  const envKey = process.env['BRAVE_SEARCH_API_KEY'];
+  const envKey = process.env.BRAVE_SEARCH_API_KEY;
   if (envKey) return envKey;
 
   try {
@@ -71,8 +71,7 @@ export const braveSearchToolDef: ToolDefinition = {
   type: 'function',
   function: {
     name: 'universal_search',
-    description:
-      'Performs a web search using Brave Search. Returns titles, links, and snippets.',
+    description: 'Performs a web search using Brave Search. Returns titles, links, and snippets.',
     parameters: {
       type: 'object',
       properties: {

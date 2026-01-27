@@ -1,22 +1,15 @@
+import type { InMemoryRunner } from '@google/adk';
 /**
  * useAgent Hook
  *
  * Provides direct ADK integration for the Ink UI using React 18 Suspense.
  * Uses a resource pattern to suspend until MCP tools are loaded.
  */
-import { useRef, useCallback } from 'react';
-import type { InMemoryRunner } from '@google/adk';
+import { useCallback, useRef } from 'react';
 import { createAdkAgentHierarchy, runAgent } from '../../agents/index.js';
 
 export interface AgentEvent {
-  type:
-    | 'text'
-    | 'tool_start'
-    | 'tool_args'
-    | 'tool_end'
-    | 'transfer'
-    | 'done'
-    | 'error';
+  type: 'text' | 'tool_start' | 'tool_args' | 'tool_end' | 'transfer' | 'done' | 'error';
   content?: string;
   toolCallId?: string;
   toolName?: string;
@@ -55,14 +48,11 @@ function createResource<T>(promise: Promise<T>) {
 }
 
 // Singleton resource created at module level
-let agentResource: ReturnType<typeof createResource<InMemoryRunner>> | null =
-  null;
+let agentResource: ReturnType<typeof createResource<InMemoryRunner>> | null = null;
 
 function getAgentResource() {
   if (!agentResource) {
-    agentResource = createResource(
-      createAdkAgentHierarchy().then(({ runner }) => runner)
-    );
+    agentResource = createResource(createAdkAgentHierarchy().then(({ runner }) => runner));
   }
   return agentResource;
 }
@@ -75,11 +65,7 @@ export function useAgent() {
   const run = useCallback(
     async function* (input: string): AsyncGenerator<AgentEvent, void, unknown> {
       try {
-        for await (const chunk of runAgent(
-          input,
-          runner,
-          sessionIdRef.current
-        )) {
+        for await (const chunk of runAgent(input, runner, sessionIdRef.current)) {
           switch (chunk.type) {
             case 'text':
               if (chunk.content) {

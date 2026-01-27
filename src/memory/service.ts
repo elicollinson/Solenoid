@@ -10,12 +10,12 @@
  * - episodic: Conversation history and interactions
  * - semantic: Extracted knowledge and learned concepts
  */
-import type Database from 'better-sqlite3';
-import { createDatabase, closeDatabase } from './database.js';
-import { EmbeddingsService, getEmbeddingsService } from './embeddings.js';
-import { searchMemories } from './search.js';
-import type { MemoryInput, MemoryRow, MemoryType, SearchResult } from './schema.js';
+import type { Database } from 'bun:sqlite';
 import { serverLogger } from '../utils/logger.js';
+import { closeDatabase, createDatabase } from './database.js';
+import { type EmbeddingsService, getEmbeddingsService } from './embeddings.js';
+import type { MemoryInput, MemoryRow, MemoryType, SearchResult } from './schema.js';
+import { searchMemories } from './search.js';
 
 export interface MemoryServiceOptions {
   dbPath: string;
@@ -28,7 +28,7 @@ export interface MemoryServiceOptions {
 }
 
 export class MemoryService {
-  private db: Database.Database;
+  private db: Database;
   private embedder: EmbeddingsService;
   private options: Required<Omit<MemoryServiceOptions, 'dbPath'>>;
 
@@ -85,11 +85,7 @@ export class MemoryService {
     return memId;
   }
 
-  async search(
-    query: string,
-    userId: string,
-    appName: string
-  ): Promise<SearchResult[]> {
+  async search(query: string, userId: string, appName: string): Promise<SearchResult[]> {
     return searchMemories(this.db, query, userId, appName, this.embedder, {
       topN: this.options.topN,
       denseLimit: this.options.denseLimit,
@@ -103,11 +99,7 @@ export class MemoryService {
     return stmt.get(id) as MemoryRow | null;
   }
 
-  getMemoriesByUser(
-    userId: string,
-    appName: string,
-    memoryType?: MemoryType
-  ): MemoryRow[] {
+  getMemoriesByUser(userId: string, appName: string, memoryType?: MemoryType): MemoryRow[] {
     let sql = 'SELECT * FROM memories WHERE user_id = ? AND app_name = ?';
     const params: Array<string | MemoryType> = [userId, appName];
 

@@ -8,7 +8,7 @@
  * Dependencies:
  * - @google/adk: LlmAgent, CallbackContext for ADK agent types
  */
-import type { LlmAgent, CallbackContext, LlmRequest, LlmResponse } from '@google/adk';
+import type { CallbackContext, LlmAgent, LlmRequest, LlmResponse } from '@google/adk';
 
 // Re-export ADK types for convenience
 export type { LlmAgent, CallbackContext, LlmRequest, LlmResponse };
@@ -67,8 +67,5 @@ export interface SessionState {
  * Agent runner interface for backwards compatibility
  */
 export interface AgentRunner {
-  run(
-    input: string,
-    sessionId?: string
-  ): AsyncGenerator<AgentStreamChunk, void, unknown>;
+  run(input: string, sessionId?: string): AsyncGenerator<AgentStreamChunk, void, unknown>;
 }

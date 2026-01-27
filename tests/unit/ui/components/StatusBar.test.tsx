@@ -3,7 +3,7 @@
  *
  * Unit tests for the StatusBar component that shows status and exit hint.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { render } from 'ink-testing-library';
 import React from 'react';
 import { StatusBar } from '../../../../src/ui/components/StatusBar.js';

@@ -22,8 +22,8 @@ export function ChartModal({ toolArgs, onClose }: ChartModalProps) {
     }
   });
 
-  const title = (toolArgs['title'] as string) || 'Chart';
-  const chartType = (toolArgs['chartType'] as string) || 'unknown';
+  const title = (toolArgs.title as string) || 'Chart';
+  const chartType = (toolArgs.chartType as string) || 'unknown';
 
   return (
     <Box
@@ -48,16 +48,14 @@ export function ChartModal({ toolArgs, onClose }: ChartModalProps) {
           toolArgs={{
             ...toolArgs,
             // Use larger width for modal view
-            width: toolArgs['width'] || '80',
+            width: toolArgs.width || '80',
           }}
         />
       </Box>
 
       {/* Footer */}
       <Box marginTop={1}>
-        <Text dimColor>
-          Chart type: {chartType} | Press ESC to return to chat
-        </Text>
+        <Text dimColor>Chart type: {chartType} | Press ESC to return to chat</Text>
       </Box>
     </Box>
   );

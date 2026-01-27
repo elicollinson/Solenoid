@@ -14,9 +14,10 @@
  * - @google/adk: LlmAgent for ADK-compatible agent
  */
 import { LlmAgent } from '@google/adk';
-import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
-import { braveSearchAdkTool, readWebpageAdkTool } from '../tools/adk-tools.js';
+import type { AppSettings } from '../config/index.js';
+import { getAdkModelName, getAgentPrompt, loadSettings } from '../config/index.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
+import { braveSearchAdkTool, readWebpageAdkTool } from '../tools/adk-tools.js';
 
 const DEFAULT_INSTRUCTION = `You are the Research Specialist, an expert in gathering comprehensive information from the web.
 
@@ -67,16 +68,14 @@ Structure your research report as:
 - Maximum 5 page reads per research task.`;
 
 // Load settings with fallback
-let settings;
+let settings: AppSettings | null;
 try {
   settings = loadSettings();
 } catch {
   settings = null;
 }
 
-const modelName = settings
-  ? getAdkModelName('research_agent', settings)
-  : 'gemini-2.5-flash';
+const modelName = settings ? getAdkModelName('research_agent', settings) : 'gemini-2.5-flash';
 
 const customPrompt = settings ? getAgentPrompt('research_agent', settings) : undefined;
 
@@ -86,7 +85,8 @@ const customPrompt = settings ? getAgentPrompt('research_agent', settings) : und
 export const researchAgent = new LlmAgent({
   name: 'research_agent',
   model: modelName,
-  description: 'Web research specialist that gathers information from the internet using search and page reading.',
+  description:
+    'Web research specialist that gathers information from the internet using search and page reading.',
   instruction: customPrompt ?? DEFAULT_INSTRUCTION,
   tools: [braveSearchAdkTool, readWebpageAdkTool],
   afterModelCallback: saveMemoriesOnFinalResponse,

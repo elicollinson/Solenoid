@@ -1,3 +1,5 @@
+import { TextInput } from '@inkjs/ui';
+import { Box, Text, useInput } from 'ink';
 /**
  * Settings Screen Component
  *
@@ -5,15 +7,13 @@
  * Shows model settings, embedding configuration, MCP servers, and
  * per-agent model overrides. Closes on Enter or Escape key press.
  */
-import { useState, useCallback, useMemo } from 'react';
-import { Box, Text, useInput } from 'ink';
-import { TextInput } from '@inkjs/ui';
+import { useCallback, useMemo, useState } from 'react';
 import {
+  type SectionInfo,
   getAllSections,
   getSectionAsYaml,
   updateSection,
   validateSectionYaml,
-  type SectionInfo,
 } from '../../config/settingsManager.js';
 import type { ValidationResult } from '../../config/validator.js';
 
@@ -153,23 +153,26 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
     setMode('line-edit');
   }, [currentLineIndex, lines]);
 
-  const confirmLineEdit = useCallback((value?: string) => {
-    const contentToSave = value ?? editBuffer;
-    const newLines = [...lines];
-    const currentLine = newLines[currentLineIndex];
-    if (currentLine) {
-      newLines[currentLineIndex] = {
-        indent: currentLine.indent,
-        content: contentToSave,
-      };
-    }
-    setLines(newLines);
-    setMode('editing');
-    // Move to next line
-    if (currentLineIndex < lines.length - 1) {
-      setCurrentLineIndex(currentLineIndex + 1);
-    }
-  }, [currentLineIndex, editBuffer, lines]);
+  const confirmLineEdit = useCallback(
+    (value?: string) => {
+      const contentToSave = value ?? editBuffer;
+      const newLines = [...lines];
+      const currentLine = newLines[currentLineIndex];
+      if (currentLine) {
+        newLines[currentLineIndex] = {
+          indent: currentLine.indent,
+          content: contentToSave,
+        };
+      }
+      setLines(newLines);
+      setMode('editing');
+      // Move to next line
+      if (currentLineIndex < lines.length - 1) {
+        setCurrentLineIndex(currentLineIndex + 1);
+      }
+    },
+    [currentLineIndex, editBuffer, lines]
+  );
 
   const cancelLineEdit = useCallback(() => {
     setMode('editing');
@@ -307,9 +310,7 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
         </Box>
 
         <Box marginTop={2}>
-          <Text dimColor>
-            ↑↓: Navigate | Enter: Edit | Esc: Close
-          </Text>
+          <Text dimColor>↑↓: Navigate | Enter: Edit | Esc: Close</Text>
         </Box>
       </Box>
     );
@@ -332,9 +333,7 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
 
           return (
             <Box key={actualIndex}>
-              <Text color={isCurrentLine ? 'cyan' : undefined}>
-                {isCurrentLine ? '>' : ' '}
-              </Text>
+              <Text color={isCurrentLine ? 'cyan' : undefined}>{isCurrentLine ? '>' : ' '}</Text>
               <Text dimColor>{String(actualIndex + 1).padStart(3, ' ')} </Text>
               {isEditing ? (
                 <Box>
@@ -363,27 +362,43 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
 
       {/* Help panel */}
       {showHelp && (
-        <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
-          <Text bold color="cyan">Keyboard Shortcuts</Text>
+        <Box
+          marginTop={1}
+          flexDirection="column"
+          borderStyle="round"
+          borderColor="cyan"
+          paddingX={1}
+        >
+          <Text bold color="cyan">
+            Keyboard Shortcuts
+          </Text>
           <Box marginTop={1} flexDirection="column">
-            <Text><Text bold>Navigation</Text></Text>
-            <Text>  ↑/↓         Move between lines</Text>
-            <Text>  Enter       Edit current line</Text>
-            <Text>  Esc         Back to section list</Text>
-            <Text/>
-            <Text><Text bold>Editing</Text></Text>
-            <Text>  Tab         Add indented child line</Text>
-            <Text>  Shift+Tab   Add sibling line (same indent)</Text>
-            <Text>  Del         Delete empty line</Text>
-            <Text/>
-            <Text><Text bold>Actions</Text></Text>
-            <Text>  Ctrl+S      Save changes</Text>
-            <Text>  Ctrl+V      Validate YAML</Text>
-            <Text>  ?           Toggle this help</Text>
-            <Text/>
-            <Text><Text bold>Line Editing Mode</Text></Text>
-            <Text>  Enter       Confirm edit, move to next</Text>
-            <Text>  Esc         Cancel edit</Text>
+            <Text>
+              <Text bold>Navigation</Text>
+            </Text>
+            <Text> ↑/↓ Move between lines</Text>
+            <Text> Enter Edit current line</Text>
+            <Text> Esc Back to section list</Text>
+            <Text />
+            <Text>
+              <Text bold>Editing</Text>
+            </Text>
+            <Text> Tab Add indented child line</Text>
+            <Text> Shift+Tab Add sibling line (same indent)</Text>
+            <Text> Del Delete empty line</Text>
+            <Text />
+            <Text>
+              <Text bold>Actions</Text>
+            </Text>
+            <Text> Ctrl+S Save changes</Text>
+            <Text> Ctrl+V Validate YAML</Text>
+            <Text> ? Toggle this help</Text>
+            <Text />
+            <Text>
+              <Text bold>Line Editing Mode</Text>
+            </Text>
+            <Text> Enter Confirm edit, move to next</Text>
+            <Text> Esc Cancel edit</Text>
           </Box>
           <Box marginTop={1}>
             <Text dimColor>Press ? or Esc to close</Text>
@@ -394,9 +409,7 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
       {/* Validation errors */}
       {validationResult && !validationResult.isValid && (
         <Box marginTop={1}>
-          <Text color="red">
-            Errors:
-          </Text>
+          <Text color="red">Errors:</Text>
           {validationResult.errors.slice(0, 3).map((err, i) => (
             <Text key={i} color="red">
               {' '}
@@ -410,9 +423,7 @@ export function SettingsScreen({ onClose }: SettingsScreenProps) {
       {/* Success/error message */}
       {message && (
         <Box marginTop={1}>
-          <Text color={message.type === 'success' ? 'green' : 'red'}>
-            {message.text}
-          </Text>
+          <Text color={message.type === 'success' ? 'green' : 'red'}>{message.text}</Text>
         </Box>
       )}
 

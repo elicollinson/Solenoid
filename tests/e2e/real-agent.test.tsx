@@ -7,7 +7,7 @@
  *
  * These tests are SKIPPED in CI environments where Ollama isn't available.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
 import { render } from 'ink-testing-library';
 import React, { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
@@ -288,16 +288,13 @@ describe.skipIf(!ollamaAvailable)('E2E Tests with Real Ollama Agent', () => {
   let initError: Error | null = null;
 
   beforeAll(async () => {
-    // Set longer timeout for agent initialization
-    vi.setConfig({ testTimeout: 120000 });
-
     try {
       await harness.initialize();
     } catch (error) {
       initError = error instanceof Error ? error : new Error(String(error));
       console.error('Failed to initialize agent:', initError.message);
     }
-  }, 120000);
+  });
 
   afterAll(() => {
     harness.dispose();
@@ -352,7 +349,7 @@ describe.skipIf(!ollamaAvailable)('E2E Tests with Real Ollama Agent', () => {
 
     // Type a message
     instance.stdin.write('Say hello');
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await Bun.sleep(100);
 
     // Submit the message
     instance.stdin.write('\r');
@@ -361,7 +358,7 @@ describe.skipIf(!ollamaAvailable)('E2E Tests with Real Ollama Agent', () => {
     const waitForResponse = async (timeout: number): Promise<boolean> => {
       const start = Date.now();
       while (Date.now() - start < timeout) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await Bun.sleep(500);
         const frame = instance.lastFrame() ?? '';
         if (frame.includes('Ready') && frame.includes('Agent')) {
           return true;
@@ -385,7 +382,7 @@ describe.skipIf(!ollamaAvailable)('E2E Tests with Real Ollama Agent', () => {
     }
 
     instance.unmount();
-  }, 120000);
+  }, { timeout: 120000 });
 
   it('should capture agent events', async () => {
     // Skip if initialization failed
@@ -411,7 +408,7 @@ describe.skipIf(!ollamaAvailable)('E2E Tests with Real Ollama Agent', () => {
       (e) => e.type === 'text' || e.type === 'error'
     );
     expect(hasTextOrError).toBe(true);
-  }, 120000);
+  }, { timeout: 120000 });
 });
 
 /**

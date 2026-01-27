@@ -1,11 +1,6 @@
-import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
-import { validateSection, hasValidator, type ValidationResult } from './validator.js';
-import {
-  getRawSettings,
-  saveSettings,
-  clearSettingsCache,
-  getSettingsPath,
-} from './settings.js';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+import { clearSettingsCache, getRawSettings, getSettingsPath, saveSettings } from './settings.js';
+import { type ValidationResult, hasValidator, validateSection } from './validator.js';
 
 export interface SectionInfo {
   key: string;

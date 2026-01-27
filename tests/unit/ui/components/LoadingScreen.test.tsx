@@ -3,20 +3,12 @@
  *
  * Unit tests for the LoadingScreen component displayed during initialization.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { render } from 'ink-testing-library';
 import React from 'react';
 import { LoadingScreen } from '../../../../src/ui/components/LoadingScreen.js';
 
 describe('LoadingScreen', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('renders with default message', () => {
     const { lastFrame } = render(<LoadingScreen />);
 
@@ -67,14 +59,14 @@ describe('LoadingScreen', () => {
     expect(lastFrame()).not.toContain('Initialization Failed');
   });
 
-  it('shows spinner after delay', async () => {
+  it('shows spinner with message', async () => {
     const { lastFrame } = render(<LoadingScreen />);
 
     // Initially shows message
     expect(lastFrame()).toContain('Initializing agents...');
 
-    // Advance past the 50ms delay
-    await vi.advanceTimersByTimeAsync(60);
+    // Wait a bit for any async updates
+    await Bun.sleep(60);
 
     // Should still contain the message (spinner label)
     expect(lastFrame()).toContain('Initializing agents...');

@@ -16,14 +16,13 @@
  * - ChartRenderer: Inline chart rendering component
  */
 import { Box, Text } from 'ink';
-import { useMemo } from 'react';
 import { marked } from 'marked';
 import TerminalRenderer from 'marked-terminal';
+import { useMemo } from 'react';
 import { ChartRenderer, isChartToolCall } from './ChartRenderer.js';
 
 // Configure marked with terminal renderer
 marked.setOptions({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   renderer: new TerminalRenderer({
     reflowText: true,
     width: 80,
@@ -103,9 +102,7 @@ function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
   if (isChartToolCall(toolCall.name) && toolCall.status === 'running') {
     return (
       <Box paddingLeft={4} marginY={0}>
-        <Text color="yellow">
-          {statusIcons[toolCall.status]} Generating chart...
-        </Text>
+        <Text color="yellow">{statusIcons[toolCall.status]} Generating chart...</Text>
       </Box>
     );
   }
@@ -116,7 +113,10 @@ function ToolCallDisplay({ toolCall }: { toolCall: ToolCall }) {
         {statusIcons[toolCall.status]} {toolCall.name}
       </Text>
       {toolCall.result && toolCall.status === 'error' && (
-        <Text color="red" dimColor> - {toolCall.result}</Text>
+        <Text color="red" dimColor>
+          {' '}
+          - {toolCall.result}
+        </Text>
       )}
     </Box>
   );
@@ -173,11 +173,8 @@ function MessageBubble({ message }: { message: Message }) {
             {renderTextContent(part.content, !!message.isStreaming, showCursor)}
           </Box>
         );
-      } else {
-        return (
-          <ToolCallDisplay key={part.toolCall.id} toolCall={part.toolCall} />
-        );
       }
+      return <ToolCallDisplay key={part.toolCall.id} toolCall={part.toolCall} />;
     });
   };
 

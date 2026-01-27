@@ -1,27 +1,38 @@
 /**
  * Memory Database
  *
- * SQLite database initialization with WAL mode for performance. Loads the
- * memory schema and optionally the sqlite-vec extension for vector search.
- * Falls back gracefully if vector extension is unavailable.
+ * SQLite database initialization with WAL mode for performance. Uses Bun's
+ * native SQLite implementation. Loads the memory schema and optionally the
+ * sqlite-vec extension for vector search. Falls back gracefully if vector
+ * extension is unavailable.
  *
  * Dependencies:
- * - better-sqlite3: Synchronous SQLite3 binding for Node.js with native performance
+ * - bun:sqlite: Bun's native SQLite implementation with excellent performance
  */
-import Database from 'better-sqlite3';
-import { MEMORY_SCHEMA } from './schema.js';
+import { Database } from 'bun:sqlite';
 import { serverLogger } from '../utils/logger.js';
+import { MEMORY_SCHEMA } from './schema.js';
 
-export function createDatabase(dbPath: string): Database.Database {
-  const db = new Database(dbPath);
+export type BunDatabase = Database;
 
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
+export function createDatabase(dbPath: string): Database {
+  const db = new Database(dbPath, { create: true });
 
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA synchronous = NORMAL');
+
+  // Try to load sqlite-vec extension for vector search
   try {
+    // sqlite-vec extension paths vary by platform
+    // Common locations: vec0, sqlite-vec, or full path
     db.loadExtension('vec0');
   } catch {
-    serverLogger.warn('sqlite-vec extension not found. Vector search will be disabled.');
+    try {
+      // Try alternative extension name
+      db.loadExtension('sqlite-vec');
+    } catch {
+      serverLogger.warn('sqlite-vec extension not found. Vector search will be disabled.');
+    }
   }
 
   const statements = MEMORY_SCHEMA.split(';')
@@ -45,6 +56,6 @@ export function createDatabase(dbPath: string): Database.Database {
   return db;
 }
 
-export function closeDatabase(db: Database.Database): void {
+export function closeDatabase(db: Database): void {
   db.close();
 }

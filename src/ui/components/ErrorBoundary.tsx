@@ -4,7 +4,7 @@
  * Catches errors from child components and displays a fallback UI.
  * Used with Suspense for handling initialization errors.
  */
-import { Component, ReactNode } from 'react';
+import { Component, type ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;

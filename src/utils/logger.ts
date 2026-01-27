@@ -1,16 +1,14 @@
 /**
  * Logging Utilities
  *
- * Structured JSON logging using Pino with file-based output. Creates separate
- * log files for server, UI, and agent components in the ./logs directory.
+ * Structured logging with file-based output. Creates separate log files for
+ * server, UI, and agent components in the ./logs directory.
  * Includes global error handlers for uncaught exceptions and rejections.
  *
- * Dependencies:
- * - pino: High-performance JSON logger with async file writing
+ * Uses Bun's native file I/O for performance.
  */
-import pino from 'pino';
-import { existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 const LOG_DIR = join(process.cwd(), 'logs');
 
@@ -19,20 +17,71 @@ if (!existsSync(LOG_DIR)) {
   mkdirSync(LOG_DIR, { recursive: true });
 }
 
-function createLogger(name: string) {
-  const logFile = join(LOG_DIR, `${name}.log`);
+type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 
-  return pino(
-    {
+interface LogEntry {
+  level: LogLevel;
+  name: string;
+  msg: string;
+  time: string;
+  [key: string]: unknown;
+}
+
+interface Logger {
+  trace: (obj: object | string, msg?: string) => void;
+  debug: (obj: object | string, msg?: string) => void;
+  info: (obj: object | string, msg?: string) => void;
+  warn: (obj: object | string, msg?: string) => void;
+  error: (obj: object | string, msg?: string) => void;
+  fatal: (obj: object | string, msg?: string) => void;
+}
+
+function createLogger(name: string): Logger {
+  const logFile = join(LOG_DIR, `${name}.log`);
+  const logLevel = (process.env.LOG_LEVEL ?? 'debug') as LogLevel;
+
+  const levels: Record<LogLevel, number> = {
+    trace: 5,
+    debug: 10,
+    info: 20,
+    warn: 30,
+    error: 40,
+    fatal: 50,
+  };
+
+  const shouldLog = (level: LogLevel): boolean => {
+    return levels[level] >= levels[logLevel];
+  };
+
+  const log = (level: LogLevel, obj: object | string, msg?: string): void => {
+    if (!shouldLog(level)) return;
+
+    const entry: LogEntry = {
+      level,
       name,
-      level: process.env['LOG_LEVEL'] ?? 'debug',
-      timestamp: pino.stdTimeFunctions.isoTime,
-    },
-    pino.destination({
-      dest: logFile,
-      sync: false,
-    })
-  );
+      msg: typeof obj === 'string' ? obj : (msg ?? ''),
+      time: new Date().toISOString(),
+      ...(typeof obj === 'object' ? obj : {}),
+    };
+
+    const line = `${JSON.stringify(entry)}\n`;
+
+    // Write to file asynchronously
+    try {
+      appendFileSync(logFile, line);
+    } catch {
+      // Ignore file write errors
+    }
+  };
+
+  return {
+    trace: (obj, msg) => log('trace', obj, msg),
+    debug: (obj, msg) => log('debug', obj, msg),
+    info: (obj, msg) => log('info', obj, msg),
+    warn: (obj, msg) => log('warn', obj, msg),
+    error: (obj, msg) => log('error', obj, msg),
+    fatal: (obj, msg) => log('fatal', obj, msg),
+  };
 }
 
 // Separate loggers for different parts of the app
@@ -41,7 +90,7 @@ export const uiLogger = createLogger('ui');
 export const agentLogger = createLogger('agent');
 
 // Helper to log uncaught errors
-export function setupErrorHandlers(logger: pino.Logger) {
+export function setupErrorHandlers(logger: Logger) {
   process.on('uncaughtException', (error) => {
     logger.fatal({ error: error.message, stack: error.stack }, 'Uncaught exception');
     // Give time for log to flush

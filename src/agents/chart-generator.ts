@@ -20,11 +20,11 @@
  * - Uses @google/adk LlmAgent for ADK-compatible agent
  * - Exports ADK-compatible FunctionTool for use with @google/adk
  */
-import { LlmAgent, FunctionTool } from '@google/adk';
-import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
-import { parseChartArgs } from '../charts/index.js';
-import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
+import { FunctionTool, LlmAgent } from '@google/adk';
 import { z } from 'zod';
+import { parseChartArgs } from '../charts/index.js';
+import { getAdkModelName, getAgentPrompt, loadSettings } from '../config/index.js';
+import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
 
 const DEFAULT_INSTRUCTION = `You are a Chart Generator Agent specializing in terminal-based data visualizations.
 
@@ -128,39 +128,45 @@ Choose the appropriate chart type:
 - line: For showing trends over time with multiple series
 - sparkline: For compact trend visualization in a single line`,
   parameters: z.object({
-    chartType: z.enum(['bar', 'stackedBar', 'line', 'sparkline'])
+    chartType: z
+      .enum(['bar', 'stackedBar', 'line', 'sparkline'])
       .describe('The type of chart to render'),
-    title: z.string().optional()
-      .describe('Optional title to display above the chart'),
+    title: z.string().optional().describe('Optional title to display above the chart'),
     // Bar chart parameters
-    barData: z.string().optional()
+    barData: z
+      .string()
+      .optional()
       .describe('JSON array of bar chart data points. Each item: {label, value, color?}'),
-    barSort: z.enum(['none', 'asc', 'desc']).optional()
-      .describe('Sort order for bar charts'),
-    barShowValue: z.enum(['right', 'inside', 'none']).optional()
+    barSort: z.enum(['none', 'asc', 'desc']).optional().describe('Sort order for bar charts'),
+    barShowValue: z
+      .enum(['right', 'inside', 'none'])
+      .optional()
       .describe('Where to show values on bar charts'),
     // Stacked bar parameters
-    stackedData: z.string().optional()
+    stackedData: z
+      .string()
+      .optional()
       .describe('JSON array of stacked bar segments. Each item: {label, value, color?}'),
-    stackedMode: z.enum(['percentage', 'absolute']).optional()
+    stackedMode: z
+      .enum(['percentage', 'absolute'])
+      .optional()
       .describe('Display mode for stacked bar'),
     // Line graph parameters
-    lineSeries: z.string().optional()
+    lineSeries: z
+      .string()
+      .optional()
       .describe('JSON array of line series. Each: {data: number[], label?, color?}'),
-    lineHeight: z.string().optional()
-      .describe('Height of line graph in rows'),
-    lineXLabels: z.string().optional()
-      .describe('JSON array of x-axis labels'),
+    lineHeight: z.string().optional().describe('Height of line graph in rows'),
+    lineXLabels: z.string().optional().describe('JSON array of x-axis labels'),
     // Sparkline parameters
-    sparklineData: z.string().optional()
-      .describe('JSON array of numbers for sparkline'),
-    sparklineColor: z.enum(['red', 'blue', 'green']).optional()
+    sparklineData: z.string().optional().describe('JSON array of numbers for sparkline'),
+    sparklineColor: z
+      .enum(['red', 'blue', 'green'])
+      .optional()
       .describe('Color scheme for sparkline'),
-    sparklineMode: z.enum(['block', 'braille']).optional()
-      .describe('Rendering mode for sparkline'),
+    sparklineMode: z.enum(['block', 'braille']).optional().describe('Rendering mode for sparkline'),
     // General
-    width: z.string().optional()
-      .describe('Width of the chart in characters'),
+    width: z.string().optional().describe('Width of the chart in characters'),
   }),
   execute: async (params) => {
     const result = parseChartArgs(params as Record<string, unknown>);
@@ -190,9 +196,7 @@ const adkModelName = settings
   ? getAdkModelName('chart_generator_agent', settings)
   : 'gemini-2.5-flash';
 
-const customPrompt = settings
-  ? getAgentPrompt('chart_generator_agent', settings)
-  : undefined;
+const customPrompt = settings ? getAgentPrompt('chart_generator_agent', settings) : undefined;
 
 /**
  * Chart Generator LlmAgent - ink-chart visualization specialist (Google ADK)

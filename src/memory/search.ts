@@ -10,9 +10,9 @@
  * 2. Sparse search via FTS5 for keyword matching
  * 3. RRF fusion to combine and re-rank results
  */
-import type Database from 'better-sqlite3';
-import type { MemoryRow, SearchResult } from './schema.js';
+import type { Database } from 'bun:sqlite';
 import type { EmbeddingsService } from './embeddings.js';
+import type { MemoryRow, SearchResult } from './schema.js';
 
 function rrf(rank: number): number {
   return 1.0 / (60.0 + rank);
@@ -44,7 +44,7 @@ interface SparseResult {
 }
 
 export async function searchMemories(
-  db: Database.Database,
+  db: Database,
   query: string,
   userId: string,
   appName: string,
@@ -82,7 +82,7 @@ export async function searchMemories(
 }
 
 async function hybridCandidates(
-  db: Database.Database,
+  db: Database,
   query: string,
   userId: string,
   appName: string,
@@ -154,9 +154,7 @@ async function hybridCandidates(
   }));
 }
 
-function rowToMemory(
-  row: DenseResult | SparseResult
-): MemoryRow {
+function rowToMemory(row: DenseResult | SparseResult): MemoryRow {
   return {
     id: row.id,
     user_id: '',

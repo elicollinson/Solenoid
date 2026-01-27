@@ -52,10 +52,7 @@ export class PythonSandbox {
     }
   }
 
-  async run(
-    code: string,
-    contextFiles?: Record<string, string>
-  ): Promise<ExecutionResult> {
+  async run(code: string, contextFiles?: Record<string, string>): Promise<ExecutionResult> {
     if (!this.pyodide) {
       return {
         stdout: '',
@@ -71,13 +68,13 @@ export class PythonSandbox {
     // Set up stdout/stderr capture
     this.pyodide.setStdout({
       batched: (text: string) => {
-        stdout += text + '\n';
+        stdout += `${text}\n`;
       },
     });
 
     this.pyodide.setStderr({
       batched: (text: string) => {
-        stderr += text + '\n';
+        stderr += `${text}\n`;
       },
     });
 
@@ -110,9 +107,7 @@ export class PythonSandbox {
     }
   }
 
-  private captureOutputFiles(
-    contextFiles?: Record<string, string>
-  ): Record<string, string> {
+  private captureOutputFiles(contextFiles?: Record<string, string>): Record<string, string> {
     if (!this.pyodide) return {};
 
     const files: Record<string, string> = {};

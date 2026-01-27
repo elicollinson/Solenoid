@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { LlmAgent } from '@google/adk';
 
 describe('LlmAgent (ADK)', () => {
@@ -42,7 +42,7 @@ describe('LlmAgent (ADK)', () => {
       });
 
       expect(agent.subAgents?.length).toBe(1);
-      expect(agent.subAgents?.[0].name).toBe('sub_agent');
+      expect(agent.subAgents?.[0]?.name).toBe('sub_agent');
     });
   });
 

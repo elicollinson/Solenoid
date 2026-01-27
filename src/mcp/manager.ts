@@ -14,9 +14,10 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { ToolDefinition } from '../llm/types.js';
+import type { AppSettings } from '../config/index.js';
 import { loadSettings } from '../config/index.js';
 import type { McpServer, McpStdioServer } from '../config/schema.js';
+import type { ToolDefinition } from '../llm/types.js';
 import { serverLogger } from '../utils/logger.js';
 
 interface McpTool {
@@ -34,7 +35,7 @@ export class McpManager {
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    let settings;
+    let settings: AppSettings;
     try {
       settings = loadSettings();
     } catch {
@@ -61,7 +62,7 @@ export class McpManager {
       version: '2.0.0',
     });
 
-    let transport;
+    let transport: StdioClientTransport | StreamableHTTPClientTransport;
 
     if (this.isStdioServer(config)) {
       transport = new StdioClientTransport({
@@ -110,8 +111,11 @@ export class McpManager {
           description: `[MCP:${tool.serverName}] ${tool.description}`,
           parameters: {
             type: 'object',
-            properties: (tool.inputSchema as { properties?: Record<string, unknown> })
-              .properties as Record<string, { type: string; description: string }> ?? {},
+            properties:
+              ((tool.inputSchema as { properties?: Record<string, unknown> }).properties as Record<
+                string,
+                { type: string; description: string }
+              >) ?? {},
             required: (tool.inputSchema as { required?: string[] }).required,
           },
         },
@@ -141,7 +145,10 @@ export class McpManager {
       // Extract text content from result
       const content = result.content as Array<{ type: string; text?: string }>;
       const textContent = content
-        .filter((c): c is { type: 'text'; text: string } => c.type === 'text' && typeof c.text === 'string')
+        .filter(
+          (c): c is { type: 'text'; text: string } =>
+            c.type === 'text' && typeof c.text === 'string'
+        )
         .map((c) => c.text)
         .join('\n');
 

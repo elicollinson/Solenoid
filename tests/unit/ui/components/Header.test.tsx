@@ -3,7 +3,7 @@
  *
  * Unit tests for the Header component that displays the app title and version.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { render } from 'ink-testing-library';
 import React from 'react';
 import { Header } from '../../../../src/ui/components/Header.js';

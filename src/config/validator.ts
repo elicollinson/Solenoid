@@ -1,10 +1,10 @@
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import {
+  EmbeddingsConfigSchema,
+  McpServerSchema,
   ModelsConfigSchema,
   SearchConfigSchema,
-  McpServerSchema,
-  EmbeddingsConfigSchema,
 } from './schema.js';
 
 export interface ValidationError {
@@ -71,19 +71,13 @@ sectionValidators.set('search', createZodValidator(SearchConfigSchema));
 sectionValidators.set('embeddings', createZodValidator(EmbeddingsConfigSchema));
 
 // MCP servers validator - record of server configs
-sectionValidators.set(
-  'mcp_servers',
-  createZodValidator(z.record(z.string(), McpServerSchema))
-);
+sectionValidators.set('mcp_servers', createZodValidator(z.record(z.string(), McpServerSchema)));
 
 // Agent prompts validator - record of strings with min length
 sectionValidators.set(
   'agent_prompts',
   createZodValidator(
-    z.record(
-      z.string(),
-      z.string().min(10, 'Prompt must be at least 10 characters')
-    )
+    z.record(z.string(), z.string().min(10, 'Prompt must be at least 10 characters'))
   )
 );
 

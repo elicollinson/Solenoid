@@ -14,8 +14,8 @@
 import { FunctionTool } from '@google/adk';
 import { z } from 'zod';
 import { braveSearch } from './brave-search.js';
-import { readWebpage } from './web-reader.js';
 import { executeCode } from './code-execution.js';
+import { readWebpage } from './web-reader.js';
 
 /**
  * Brave Search ADK Tool
@@ -23,8 +23,7 @@ import { executeCode } from './code-execution.js';
  */
 export const braveSearchAdkTool = new FunctionTool({
   name: 'universal_search',
-  description:
-    'Performs a web search using Brave Search. Returns titles, links, and snippets.',
+  description: 'Performs a web search using Brave Search. Returns titles, links, and snippets.',
   parameters: z.object({
     query: z.string().describe('The search query string'),
   }),

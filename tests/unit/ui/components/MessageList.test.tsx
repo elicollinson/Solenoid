@@ -3,7 +3,7 @@
  *
  * Unit tests for the MessageList component that displays chat messages.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { render } from 'ink-testing-library';
 import React from 'react';
 import { MessageList, type Message } from '../../../../src/ui/components/MessageList.js';

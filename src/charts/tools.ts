@@ -43,7 +43,8 @@ Choose the appropriate chart type:
         // Bar chart properties
         barData: {
           type: 'string',
-          description: 'JSON array of bar chart data points. Each item should have: label (string), value (number), and optional color (string like "red", "blue", "green", "yellow", "cyan", "magenta"). Example: [{"label":"Q1","value":100},{"label":"Q2","value":150}]',
+          description:
+            'JSON array of bar chart data points. Each item should have: label (string), value (number), and optional color (string like "red", "blue", "green", "yellow", "cyan", "magenta"). Example: [{"label":"Q1","value":100},{"label":"Q2","value":150}]',
         },
         barSort: {
           type: 'string',
@@ -58,7 +59,8 @@ Choose the appropriate chart type:
         // Stacked bar properties
         stackedData: {
           type: 'string',
-          description: 'JSON array of stacked bar segments. Each item should have: label (string), value (number), and optional color. Example: [{"label":"Product A","value":40,"color":"blue"},{"label":"Product B","value":30,"color":"green"}]',
+          description:
+            'JSON array of stacked bar segments. Each item should have: label (string), value (number), and optional color. Example: [{"label":"Product A","value":40,"color":"blue"},{"label":"Product B","value":30,"color":"green"}]',
         },
         stackedMode: {
           type: 'string',
@@ -68,7 +70,8 @@ Choose the appropriate chart type:
         // Line graph properties
         lineSeries: {
           type: 'string',
-          description: 'JSON array of line series. Each series has: data (array of numbers), optional label (string), optional color. Example: [{"label":"Sales","data":[10,20,15,30,25],"color":"blue"}]',
+          description:
+            'JSON array of line series. Each series has: data (array of numbers), optional label (string), optional color. Example: [{"label":"Sales","data":[10,20,15,30,25],"color":"blue"}]',
         },
         lineHeight: {
           type: 'string',
@@ -96,7 +99,8 @@ Choose the appropriate chart type:
         // General
         width: {
           type: 'string',
-          description: 'Width of the chart in characters (number as string, e.g., "60"). Defaults to 60.',
+          description:
+            'Width of the chart in characters (number as string, e.g., "60"). Defaults to 60.',
         },
       },
       required: ['chartType'],
@@ -114,13 +118,13 @@ export function parseChartArgs(args: Record<string, unknown>): {
   error?: string;
 } {
   try {
-    const chartType = args['chartType'] as string;
-    const title = args['title'] as string | undefined;
-    const width = args['width'] ? parseInt(args['width'] as string, 10) : 60;
+    const chartType = args.chartType as string;
+    const title = args.title as string | undefined;
+    const width = args.width ? Number.parseInt(args.width as string, 10) : 60;
 
     switch (chartType) {
       case 'bar': {
-        const dataStr = args['barData'] as string;
+        const dataStr = args.barData as string;
         if (!dataStr) {
           return { success: false, error: 'barData is required for bar charts' };
         }
@@ -131,15 +135,15 @@ export function parseChartArgs(args: Record<string, unknown>): {
             chartType: 'bar',
             title,
             data,
-            sort: (args['barSort'] as 'none' | 'asc' | 'desc') || 'none',
-            showValue: (args['barShowValue'] as 'right' | 'inside' | 'none') || 'right',
+            sort: (args.barSort as 'none' | 'asc' | 'desc') || 'none',
+            showValue: (args.barShowValue as 'right' | 'inside' | 'none') || 'right',
             width,
           },
         };
       }
 
       case 'stackedBar': {
-        const dataStr = args['stackedData'] as string;
+        const dataStr = args.stackedData as string;
         if (!dataStr) {
           return { success: false, error: 'stackedData is required for stacked bar charts' };
         }
@@ -150,7 +154,7 @@ export function parseChartArgs(args: Record<string, unknown>): {
             chartType: 'stackedBar',
             title,
             data,
-            mode: (args['stackedMode'] as 'percentage' | 'absolute') || 'percentage',
+            mode: (args.stackedMode as 'percentage' | 'absolute') || 'percentage',
             showLabels: true,
             showValues: true,
             width,
@@ -159,14 +163,14 @@ export function parseChartArgs(args: Record<string, unknown>): {
       }
 
       case 'line': {
-        const seriesStr = args['lineSeries'] as string;
+        const seriesStr = args.lineSeries as string;
         if (!seriesStr) {
           return { success: false, error: 'lineSeries is required for line graphs' };
         }
         const series = JSON.parse(seriesStr);
-        const xLabelsStr = args['lineXLabels'] as string | undefined;
+        const xLabelsStr = args.lineXLabels as string | undefined;
         const xLabels = xLabelsStr ? JSON.parse(xLabelsStr) : undefined;
-        const height = args['lineHeight'] ? parseInt(args['lineHeight'] as string, 10) : 10;
+        const height = args.lineHeight ? Number.parseInt(args.lineHeight as string, 10) : 10;
         return {
           success: true,
           config: {
@@ -181,13 +185,13 @@ export function parseChartArgs(args: Record<string, unknown>): {
       }
 
       case 'sparkline': {
-        const dataStr = args['sparklineData'] as string;
+        const dataStr = args.sparklineData as string;
         if (!dataStr) {
           return { success: false, error: 'sparklineData is required for sparklines' };
         }
         const data = JSON.parse(dataStr);
-        const threshold = args['sparklineThreshold']
-          ? parseFloat(args['sparklineThreshold'] as string)
+        const threshold = args.sparklineThreshold
+          ? Number.parseFloat(args.sparklineThreshold as string)
           : undefined;
         return {
           success: true,
@@ -195,8 +199,8 @@ export function parseChartArgs(args: Record<string, unknown>): {
             chartType: 'sparkline',
             title,
             data,
-            colorScheme: (args['sparklineColor'] as 'red' | 'blue' | 'green') || 'blue',
-            mode: (args['sparklineMode'] as 'block' | 'braille') || 'block',
+            colorScheme: (args.sparklineColor as 'red' | 'blue' | 'green') || 'blue',
+            mode: (args.sparklineMode as 'block' | 'braille') || 'block',
             threshold,
           },
         };
