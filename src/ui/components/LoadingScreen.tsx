@@ -1,21 +1,18 @@
+import { Spinner } from '@inkjs/ui';
+import { Box, Text } from 'ink';
 /**
  * Loading Screen Component
  *
  * Displayed during agent initialization with a status message.
  */
-import { useState, useEffect } from 'react';
-import { Box, Text } from 'ink';
-import { Spinner } from '@inkjs/ui';
+import { useEffect, useState } from 'react';
 
 interface LoadingScreenProps {
   message?: string;
   error?: Error | null;
 }
 
-export function LoadingScreen({
-  message = 'Initializing agents...',
-  error,
-}: LoadingScreenProps) {
+export function LoadingScreen({ message = 'Initializing agents...', error }: LoadingScreenProps) {
   // Delay spinner animation to avoid Ink rendering race condition
   const [showSpinner, setShowSpinner] = useState(false);
 
@@ -45,11 +42,7 @@ export function LoadingScreen({
       height="100%"
     >
       <Box marginBottom={1}>
-        {showSpinner ? (
-          <Spinner label={message} />
-        ) : (
-          <Text>{message}</Text>
-        )}
+        {showSpinner ? <Spinner label={message} /> : <Text>{message}</Text>}
       </Box>
       <Text dimColor>Setting up MCP connections and agent hierarchy...</Text>
     </Box>

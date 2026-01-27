@@ -10,8 +10,8 @@
  * - bun:sqlite: Bun's native SQLite implementation with excellent performance
  */
 import { Database } from 'bun:sqlite';
-import { MEMORY_SCHEMA } from './schema.js';
 import { serverLogger } from '../utils/logger.js';
+import { MEMORY_SCHEMA } from './schema.js';
 
 export type BunDatabase = Database;
 

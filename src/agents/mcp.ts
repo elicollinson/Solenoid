@@ -16,10 +16,11 @@
  * - @modelcontextprotocol/sdk: Official MCP client implementation
  */
 import { LlmAgent } from '@google/adk';
-import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
-import { createMcpAdkTools } from '../tools/mcp-adk-adapter.js';
+import type { AppSettings } from '../config/index.js';
+import { getAdkModelName, getAgentPrompt, loadSettings } from '../config/index.js';
 import { getMcpManager } from '../mcp/index.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
+import { createMcpAdkTools } from '../tools/mcp-adk-adapter.js';
 
 const DEFAULT_INSTRUCTION = `You are an MCP tools specialist. You MUST use the tools provided to you.
 
@@ -51,16 +52,14 @@ After calling tools and getting results, format your response as:
 Success / Partial / Could Not Complete`;
 
 // Load settings with fallback
-let settings;
+let settings: AppSettings | null;
 try {
   settings = loadSettings();
 } catch {
   settings = null;
 }
 
-const modelName = settings
-  ? getAdkModelName('mcp_agent', settings)
-  : 'gemini-2.5-flash';
+const modelName = settings ? getAdkModelName('mcp_agent', settings) : 'gemini-2.5-flash';
 
 const customPrompt = settings ? getAgentPrompt('mcp_agent', settings) : undefined;
 
@@ -71,7 +70,8 @@ const customPrompt = settings ? getAgentPrompt('mcp_agent', settings) : undefine
 export const mcpAgent = new LlmAgent({
   name: 'mcp_agent',
   model: modelName,
-  description: 'MCP tools specialist for documentation lookup, file operations, and external integrations.',
+  description:
+    'MCP tools specialist for documentation lookup, file operations, and external integrations.',
   instruction: customPrompt ?? DEFAULT_INSTRUCTION,
   tools: [], // Tools are loaded dynamically via createMcpAgent
   afterModelCallback: saveMemoriesOnFinalResponse,
@@ -89,7 +89,8 @@ export async function createMcpAgent(): Promise<LlmAgent> {
   return new LlmAgent({
     name: 'mcp_agent',
     model: modelName,
-    description: 'MCP tools specialist for documentation lookup, file operations, and external integrations.',
+    description:
+      'MCP tools specialist for documentation lookup, file operations, and external integrations.',
     instruction: customPrompt ?? DEFAULT_INSTRUCTION,
     tools: mcpTools,
     afterModelCallback: saveMemoriesOnFinalResponse,

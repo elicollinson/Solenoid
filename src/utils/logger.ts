@@ -7,7 +7,7 @@
  *
  * Uses Bun's native file I/O for performance.
  */
-import { existsSync, mkdirSync, appendFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const LOG_DIR = join(process.cwd(), 'logs');
@@ -38,7 +38,7 @@ interface Logger {
 
 function createLogger(name: string): Logger {
   const logFile = join(LOG_DIR, `${name}.log`);
-  const logLevel = (process.env['LOG_LEVEL'] ?? 'debug') as LogLevel;
+  const logLevel = (process.env.LOG_LEVEL ?? 'debug') as LogLevel;
 
   const levels: Record<LogLevel, number> = {
     trace: 5,
@@ -59,12 +59,12 @@ function createLogger(name: string): Logger {
     const entry: LogEntry = {
       level,
       name,
-      msg: typeof obj === 'string' ? obj : msg ?? '',
+      msg: typeof obj === 'string' ? obj : (msg ?? ''),
       time: new Date().toISOString(),
       ...(typeof obj === 'object' ? obj : {}),
     };
 
-    const line = JSON.stringify(entry) + '\n';
+    const line = `${JSON.stringify(entry)}\n`;
 
     // Write to file asynchronously
     try {

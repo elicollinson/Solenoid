@@ -21,7 +21,7 @@ import type {
 export class OllamaProvider implements LLMProvider {
   private client: Ollama;
 
-  constructor(host: string = 'http://localhost:11434') {
+  constructor(host = 'http://localhost:11434') {
     this.client = new Ollama({ host });
   }
 
@@ -100,11 +100,7 @@ export class OllamaProvider implements LLMProvider {
           })),
         },
         done: part.done,
-        done_reason: part.done
-          ? part.message.tool_calls
-            ? 'tool_calls'
-            : 'stop'
-          : undefined,
+        done_reason: part.done ? (part.message.tool_calls ? 'tool_calls' : 'stop') : undefined,
       };
       yield chunk;
     }

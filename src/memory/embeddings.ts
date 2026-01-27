@@ -15,11 +15,7 @@ export class EmbeddingsService {
   private model: string;
   private cropDim: number;
 
-  constructor(
-    host: string = 'http://localhost:11434',
-    model: string = 'nomic-embed-text',
-    cropDim: number = 256
-  ) {
+  constructor(host = 'http://localhost:11434', model = 'nomic-embed-text', cropDim = 256) {
     this.client = new Ollama({ host });
     this.model = model;
     this.cropDim = cropDim;
@@ -89,10 +85,7 @@ export class EmbeddingsService {
 
 let defaultEmbedder: EmbeddingsService | null = null;
 
-export function getEmbeddingsService(
-  host?: string,
-  model?: string
-): EmbeddingsService {
+export function getEmbeddingsService(host?: string, model?: string): EmbeddingsService {
   if (!defaultEmbedder) {
     defaultEmbedder = new EmbeddingsService(host, model);
   }

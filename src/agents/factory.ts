@@ -22,7 +22,6 @@ import { InMemoryRunner } from '@google/adk';
 import '../llm/ollama-adk.js';
 import { createPlanningAgent } from './planning.js';
 
-
 /**
  * ADK-native agent hierarchy interface
  */

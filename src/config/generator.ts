@@ -13,7 +13,7 @@
  * - OPENAI_API_KEY: OpenAI API key (for embeddings/models)
  * - ANTHROPIC_API_KEY: Anthropic API key
  */
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { stringify as stringifyYaml } from 'yaml';
 import type { AppSettings } from './schema.js';
@@ -114,7 +114,12 @@ function setNestedValue(obj: Record<string, unknown>, path: string[], value: unk
  * Generate settings with environment variables injected
  */
 export function generateSettings(options: GenerateSettingsOptions = {}): AppSettings {
-  const { baseSettings, envMappings = DEFAULT_ENV_MAPPINGS, additionalEnvVars, onlySetEnvVars = false } = options;
+  const {
+    baseSettings,
+    envMappings = DEFAULT_ENV_MAPPINGS,
+    additionalEnvVars,
+    onlySetEnvVars = false,
+  } = options;
 
   // Start with default settings or provided base
   const settings = onlySetEnvVars
@@ -169,7 +174,12 @@ export interface WriteSettingsOptions extends GenerateSettingsOptions {
  * @returns The path to the written file
  */
 export function writeSettingsFile(options: WriteSettingsOptions = {}): string {
-  const { outputPath = './app_settings.yaml', createDirs = true, overwrite = true, ...generateOptions } = options;
+  const {
+    outputPath = './app_settings.yaml',
+    createDirs = true,
+    overwrite = true,
+    ...generateOptions
+  } = options;
 
   const resolvedPath = resolve(outputPath);
 
@@ -203,7 +213,9 @@ export function writeSettingsFile(options: WriteSettingsOptions = {}): string {
 /**
  * Get a summary of which env vars are set and would be injected
  */
-export function getEnvVarStatus(envMappings: EnvMapping[] = DEFAULT_ENV_MAPPINGS): Record<string, boolean> {
+export function getEnvVarStatus(
+  envMappings: EnvMapping[] = DEFAULT_ENV_MAPPINGS
+): Record<string, boolean> {
   const status: Record<string, boolean> = {};
   for (const mapping of envMappings) {
     const envValue = process.env[mapping.envVar];

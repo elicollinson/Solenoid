@@ -11,8 +11,8 @@
  * 3. RRF fusion to combine and re-rank results
  */
 import type { Database } from 'bun:sqlite';
-import type { MemoryRow, SearchResult } from './schema.js';
 import type { EmbeddingsService } from './embeddings.js';
+import type { MemoryRow, SearchResult } from './schema.js';
 
 function rrf(rank: number): number {
   return 1.0 / (60.0 + rank);
@@ -154,9 +154,7 @@ async function hybridCandidates(
   }));
 }
 
-function rowToMemory(
-  row: DenseResult | SparseResult
-): MemoryRow {
+function rowToMemory(row: DenseResult | SparseResult): MemoryRow {
   return {
     id: row.id,
     user_id: '',

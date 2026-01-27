@@ -1,3 +1,5 @@
+import { TextInput } from '@inkjs/ui';
+import { Box, Text } from 'ink';
 /**
  * Solenoid Test Harness
  *
@@ -11,22 +13,21 @@
  * - Auto-generate app_settings.yaml with secrets from environment variables
  */
 import { render } from 'ink-testing-library';
-import React, { useState, useCallback } from 'react';
-import { Box, Text } from 'ink';
-import { TextInput } from '@inkjs/ui';
-import { MockAgent } from './mock-agent.js';
-import { writeSettingsFile, getEnvVarStatus } from '../../config/generator.js';
+import type React from 'react';
+import { useCallback, useState } from 'react';
+import { getEnvVarStatus, writeSettingsFile } from '../../config/generator.js';
 import { clearSettingsCache } from '../../config/settings.js';
+import { MockAgent } from './mock-agent.js';
 import type {
-  TestHarnessConfig,
-  UIState,
-  StructuredFrame,
-  CommandResult,
-  ToolCallAssertion,
-  Message,
-  AgentInterface,
   AgentEvent,
+  AgentInterface,
+  CommandResult,
+  Message,
   SettingsConfig,
+  StructuredFrame,
+  TestHarnessConfig,
+  ToolCallAssertion,
+  UIState,
 } from './types.js';
 
 /**
@@ -40,7 +41,7 @@ class RealAgentWrapper implements AgentInterface {
   private initPromise: Promise<void> | null = null;
   private initError: Error | null = null;
 
-  async initialize(timeout: number = 30000): Promise<void> {
+  async initialize(timeout = 30000): Promise<void> {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
@@ -320,10 +321,8 @@ export class SolenoidTestHarness {
    * Execute a slash command
    */
   async executeCommand(command: string): Promise<CommandResult> {
-    if (!command.startsWith('/')) {
-      command = '/' + command;
-    }
-    return this.sendMessage(command);
+    const cmd = command.startsWith('/') ? command : `/${command}`;
+    return this.sendMessage(cmd);
   }
 
   /**
@@ -474,8 +473,7 @@ export class SolenoidTestHarness {
 
       if (assertion.expectedArgs) {
         const argsEvent = events.find(
-          (e) =>
-            e.type === 'tool_args' && e.toolCallId === startEvent.toolCallId
+          (e) => e.type === 'tool_args' && e.toolCallId === startEvent.toolCallId
         );
 
         if (!argsEvent?.toolArgs) {
@@ -585,133 +583,126 @@ export class SolenoidTestHarness {
       const [status, setStatus] = useState('Ready');
       const [inputKey, setInputKey] = useState(0);
 
-      const handleSubmit = useCallback(
-        async (text: string) => {
-          const trimmed = text.trim();
-          if (!trimmed) return;
+      const handleSubmit = useCallback(async (text: string) => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
 
-          // Handle slash commands
-          if (trimmed.startsWith('/')) {
-            const cmd = trimmed.toLowerCase();
-            if (cmd === '/help') {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: crypto.randomUUID(),
-                  role: 'system' as const,
-                  content:
-                    'Solenoid Help\n\nSlash Commands:\n/help - Show help\n/clear - Clear messages\n/quit - Exit',
-                },
-              ]);
-            } else if (cmd === '/clear') {
-              setMessages([]);
-            } else if (cmd === '/agents') {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: crypto.randomUUID(),
-                  role: 'system' as const,
-                  content:
-                    'Available agents:\n- research_agent\n- code_executor_agent\n- chart_generator_agent',
-                },
-              ]);
-            } else {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: crypto.randomUUID(),
-                  role: 'system' as const,
-                  content: `Unknown command: ${trimmed}`,
-                },
-              ]);
-            }
-            setInputKey((k) => k + 1);
-            return;
+        // Handle slash commands
+        if (trimmed.startsWith('/')) {
+          const cmd = trimmed.toLowerCase();
+          if (cmd === '/help') {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                role: 'system' as const,
+                content:
+                  'Solenoid Help\n\nSlash Commands:\n/help - Show help\n/clear - Clear messages\n/quit - Exit',
+              },
+            ]);
+          } else if (cmd === '/clear') {
+            setMessages([]);
+          } else if (cmd === '/agents') {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                role: 'system' as const,
+                content:
+                  'Available agents:\n- research_agent\n- code_executor_agent\n- chart_generator_agent',
+              },
+            ]);
+          } else {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: crypto.randomUUID(),
+                role: 'system' as const,
+                content: `Unknown command: ${trimmed}`,
+              },
+            ]);
           }
-
-          // Add user message
-          const userMessage: Message = {
-            id: crypto.randomUUID(),
-            role: 'user',
-            content: trimmed,
-          };
-          setMessages((prev) => [...prev, userMessage]);
-          setIsProcessing(true);
-          setStatus('Thinking...');
           setInputKey((k) => k + 1);
+          return;
+        }
 
-          // Process agent response
-          const assistantId = crypto.randomUUID();
-          let content = '';
+        // Add user message
+        const userMessage: Message = {
+          id: crypto.randomUUID(),
+          role: 'user',
+          content: trimmed,
+        };
+        setMessages((prev) => [...prev, userMessage]);
+        setIsProcessing(true);
+        setStatus('Thinking...');
+        setInputKey((k) => k + 1);
 
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: assistantId,
-              role: 'assistant' as const,
-              content: '',
-              isStreaming: true,
-            },
-          ]);
+        // Process agent response
+        const assistantId = crypto.randomUUID();
+        let content = '';
 
-          try {
-            for await (const event of activeAgent.run(trimmed)) {
-              // Track events for custom agents that don't have their own tracking
-              if (!activeAgent.getEventHistory) {
-                eventHistory.push(event);
-              }
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: assistantId,
+            role: 'assistant' as const,
+            content: '',
+            isStreaming: true,
+          },
+        ]);
 
-              if (debug) {
-                console.log('[TestHarness] Event:', event.type);
-              }
-
-              if (event.type === 'text' && event.content) {
-                content += event.content;
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantId ? { ...m, content } : m
-                  )
-                );
-              } else if (event.type === 'error') {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantId
-                      ? {
-                          ...m,
-                          content: `Error: ${event.error}`,
-                          isStreaming: false,
-                        }
-                      : m
-                  )
-                );
-                break;
-              }
+        try {
+          for await (const event of activeAgent.run(trimmed)) {
+            // Track events for custom agents that don't have their own tracking
+            if (!activeAgent.getEventHistory) {
+              eventHistory.push(event);
             }
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? {
-                      ...m,
-                      content: `Error: ${errorMessage}`,
-                      isStreaming: false,
-                    }
-                  : m
-              )
-            );
-          }
 
+            if (debug) {
+              console.log('[TestHarness] Event:', event.type);
+            }
+
+            if (event.type === 'text' && event.content) {
+              content += event.content;
+              setMessages((prev) =>
+                prev.map((m) => (m.id === assistantId ? { ...m, content } : m))
+              );
+            } else if (event.type === 'error') {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                        ...m,
+                        content: `Error: ${event.error}`,
+                        isStreaming: false,
+                      }
+                    : m
+                )
+              );
+              break;
+            }
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === assistantId ? { ...m, isStreaming: false } : m
+              m.id === assistantId
+                ? {
+                    ...m,
+                    content: `Error: ${errorMessage}`,
+                    isStreaming: false,
+                  }
+                : m
             )
           );
-          setIsProcessing(false);
-          setStatus('Ready');
-        },
-        []
-      );
+        }
+
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
+        );
+        setIsProcessing(false);
+        setStatus('Ready');
+      }, []);
 
       return (
         <Box flexDirection="column">
@@ -726,27 +717,17 @@ export class SolenoidTestHarness {
           {/* Messages */}
           <Box flexDirection="column" paddingY={1}>
             {messages.length === 0 ? (
-              <Text dimColor>
-                No messages yet. Type something to get started!
-              </Text>
+              <Text dimColor>No messages yet. Type something to get started!</Text>
             ) : (
               messages.map((msg) => (
                 <Box key={msg.id} flexDirection="column" marginBottom={1}>
                   <Text
                     bold
                     color={
-                      msg.role === 'user'
-                        ? 'green'
-                        : msg.role === 'assistant'
-                          ? 'cyan'
-                          : 'yellow'
+                      msg.role === 'user' ? 'green' : msg.role === 'assistant' ? 'cyan' : 'yellow'
                     }
                   >
-                    {msg.role === 'user'
-                      ? 'You'
-                      : msg.role === 'assistant'
-                        ? 'Solenoid'
-                        : 'System'}
+                    {msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Solenoid' : 'System'}
                   </Text>
                   <Box paddingLeft={2}>
                     <Text wrap="wrap">
@@ -760,17 +741,11 @@ export class SolenoidTestHarness {
           </Box>
 
           {/* Input */}
-          <Box
-            borderStyle="round"
-            borderColor={isProcessing ? 'gray' : 'green'}
-            paddingX={1}
-          >
+          <Box borderStyle="round" borderColor={isProcessing ? 'gray' : 'green'} paddingX={1}>
             <Text color={isProcessing ? 'gray' : 'green'}>{'> '}</Text>
             <TextInput
               key={inputKey}
-              placeholder={
-                isProcessing ? 'Waiting for response...' : 'Ask the agent...'
-              }
+              placeholder={isProcessing ? 'Waiting for response...' : 'Ask the agent...'}
               onSubmit={handleSubmit}
               isDisabled={isProcessing}
             />
@@ -796,9 +771,7 @@ export class SolenoidTestHarness {
 
   private captureFrame(): void {
     if (this.instance) {
-      const frame = this.createStructuredFrame(
-        this.instance.lastFrame() ?? ''
-      );
+      const frame = this.createStructuredFrame(this.instance.lastFrame() ?? '');
       this.frameHistory.push(frame);
     }
   }
@@ -821,9 +794,7 @@ export class SolenoidTestHarness {
     return {
       screen,
       messages: [], // Would need component state access for accurate parsing
-      isProcessing:
-        frame.includes('Thinking...') ||
-        frame.includes('Waiting for response'),
+      isProcessing: frame.includes('Thinking...') || frame.includes('Waiting for response'),
       status: this.extractStatus(frame),
       inputValue: '', // Not easily extractable from frame
       inputEnabled: !frame.includes('Waiting for response'),

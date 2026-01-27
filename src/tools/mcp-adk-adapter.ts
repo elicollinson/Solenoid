@@ -10,7 +10,7 @@
  * - @modelcontextprotocol/sdk: MCP client for tool discovery
  */
 import { FunctionTool } from '@google/adk';
-import { z, type ZodTypeAny } from 'zod';
+import { type ZodTypeAny, z } from 'zod';
 import { getMcpManager } from '../mcp/index.js';
 
 /**
@@ -114,9 +114,7 @@ export async function createMcpAdkTools(): Promise<FunctionTool[]> {
   const tools: FunctionTool[] = [];
 
   for (const fullName of toolNames) {
-    const toolDef = mcpManager
-      .getToolDefinitions()
-      .find((t) => t.function.name === fullName);
+    const toolDef = mcpManager.getToolDefinitions().find((t) => t.function.name === fullName);
 
     if (!toolDef) continue;
 
@@ -153,9 +151,7 @@ export async function createMcpAdkTool(toolName: string): Promise<FunctionTool |
   const mcpManager = getMcpManager();
   await mcpManager.initialize();
 
-  const toolDef = mcpManager
-    .getToolDefinitions()
-    .find((t) => t.function.name === toolName);
+  const toolDef = mcpManager.getToolDefinitions().find((t) => t.function.name === toolName);
 
   if (!toolDef) return null;
 

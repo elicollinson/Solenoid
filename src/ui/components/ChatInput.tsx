@@ -1,3 +1,5 @@
+import { TextInput } from '@inkjs/ui';
+import { Box, Text } from 'ink';
 /**
  * Chat Input Component
  *
@@ -8,9 +10,7 @@
  * Dependencies:
  * - @inkjs/ui: UI component library for Ink (TextInput)
  */
-import { useState, useCallback } from 'react';
-import { Box, Text } from 'ink';
-import { TextInput } from '@inkjs/ui';
+import { useCallback, useState } from 'react';
 import { uiLogger } from '../../utils/logger.js';
 
 interface ChatInputProps {

@@ -17,6 +17,8 @@
  * - @google/adk: LlmAgent for ADK-compatible agent with subAgents
  */
 import { LlmAgent } from '@google/adk';
+import type { AppSettings } from '../config/index.js';
+import { getAdkModelName, getAgentPrompt, loadSettings } from '../config/index.js';
 
 /**
  * Minimal context interface matching ADK's ReadonlyContext
@@ -27,16 +29,15 @@ interface InstructionContext {
     get<T>(key: string, defaultValue?: T): T | undefined;
   };
 }
-import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
-import { agentLogger } from '../utils/logger.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
+import { agentLogger } from '../utils/logger.js';
 
+import { chartGeneratorAgent } from './chart-generator.js';
+import { codeExecutorAgent } from './code-executor.js';
+import { genericAgent } from './generic.js';
+import { createMcpAgent, mcpAgent } from './mcp.js';
 // Import specialist agents
 import { researchAgent } from './research.js';
-import { genericAgent } from './generic.js';
-import { codeExecutorAgent } from './code-executor.js';
-import { chartGeneratorAgent } from './chart-generator.js';
-import { mcpAgent, createMcpAgent } from './mcp.js';
 
 const DEFAULT_INSTRUCTION = `You are the Chief Planner. You coordinate a team of specialist agents to solve complex tasks.
 
@@ -93,16 +94,14 @@ When the user request is missing details:
 - ALWAYS transfer final result to parent agent when done`;
 
 // Load settings with fallback
-let settings;
+let settings: AppSettings | null;
 try {
   settings = loadSettings();
 } catch {
   settings = null;
 }
 
-const modelName = settings
-  ? getAdkModelName('planning_agent', settings)
-  : 'gemini-2.5-flash';
+const modelName = settings ? getAdkModelName('planning_agent', settings) : 'gemini-2.5-flash';
 
 const customPrompt = settings ? getAgentPrompt('planning_agent', settings) : undefined;
 
@@ -119,9 +118,7 @@ function getDynamicInstruction(context: InstructionContext): string {
  * Creates a planning agent with dynamic MCP tools
  * Use this when you need MCP tools to be fully initialized
  */
-export async function createPlanningAgent(
-  additionalSubAgents: LlmAgent[] = []
-): Promise<LlmAgent> {
+export async function createPlanningAgent(additionalSubAgents: LlmAgent[] = []): Promise<LlmAgent> {
   // Get fully initialized MCP agent
   let initializedMcpAgent: LlmAgent;
   try {

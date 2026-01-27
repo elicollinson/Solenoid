@@ -1,3 +1,4 @@
+import { Box, useApp, useInput } from 'ink';
 /**
  * Main App Component
  *
@@ -9,26 +10,25 @@
  * - ink: React-based terminal UI framework
  * - React Suspense: Handles loading state during agent initialization
  */
-import { useState, useEffect, Suspense } from "react";
-import { Box, useApp, useInput } from "ink";
+import { Suspense, useEffect, useState } from 'react';
+import { loadSettings } from '../config/index.js';
+import { uiLogger } from '../utils/logger.js';
 import {
-  Header,
-  MessageList,
   ChatInput,
-  StatusBar,
-  SettingsScreen,
+  ErrorBoundary,
+  Header,
   HelpScreen,
   LoadingScreen,
-  ErrorBoundary,
   type Message,
+  MessageList,
   type MessagePart,
+  SettingsScreen,
+  StatusBar,
   type ToolCall,
-} from "./components/index.js";
-import { useAgent } from "./hooks/index.js";
-import { loadSettings } from "../config/index.js";
-import { uiLogger } from "../utils/logger.js";
+} from './components/index.js';
+import { useAgent } from './hooks/index.js';
 
-type Screen = "chat" | "settings" | "help";
+type Screen = 'chat' | 'settings' | 'help';
 
 export function App() {
   return (
@@ -46,16 +46,16 @@ function AppContent() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [status, setStatus] = useState("Ready");
-  const [screen, setScreen] = useState<Screen>("chat");
+  const [status, setStatus] = useState('Ready');
+  const [screen, setScreen] = useState<Screen>('chat');
 
   useEffect(() => {
-    uiLogger.debug("App useEffect: loading settings");
+    uiLogger.debug('App useEffect: loading settings');
     try {
       loadSettings();
-      uiLogger.info("Settings loaded successfully");
+      uiLogger.info('Settings loaded successfully');
     } catch (error) {
-      uiLogger.warn({ error }, "Settings not available");
+      uiLogger.warn({ error }, 'Settings not available');
     }
   }, []);
 
@@ -63,33 +63,33 @@ function AppContent() {
   useInput(
     (_char, key) => {
       if (key.escape) {
-        uiLogger.info("Escape pressed, returning to chat");
-        setScreen("chat");
+        uiLogger.info('Escape pressed, returning to chat');
+        setScreen('chat');
       }
     },
-    { isActive: screen !== "chat" }
+    { isActive: screen !== 'chat' }
   );
 
   const handleSlashCommand = (command: string): boolean => {
     const cmd = command.toLowerCase().trim();
     switch (cmd) {
-      case "/help":
-        setScreen("help");
+      case '/help':
+        setScreen('help');
         return true;
-      case "/settings":
-        setScreen("settings");
+      case '/settings':
+        setScreen('settings');
         return true;
-      case "/clear":
+      case '/clear':
         setMessages([]);
         return true;
-      case "/quit":
-      case "/exit":
+      case '/quit':
+      case '/exit':
         exit();
         return true;
-      case "/agents": {
+      case '/agents': {
         const agentList: Message = {
           id: crypto.randomUUID(),
-          role: "system",
+          role: 'system',
           content: `Available agents:
   - research_agent: Web search and research tasks
   - code_executor_agent: Execute Python code
@@ -101,10 +101,10 @@ function AppContent() {
         return true;
       }
       default:
-        if (command.startsWith("/")) {
+        if (command.startsWith('/')) {
           const unknownCmd: Message = {
             id: crypto.randomUUID(),
-            role: "system",
+            role: 'system',
             content: `Unknown command: ${command}. Type /help for available commands.`,
           };
           setMessages((prev) => [...prev, unknownCmd]);
@@ -115,24 +115,24 @@ function AppContent() {
   };
 
   const handleSubmit = async (text: string) => {
-    uiLogger.info({ text }, "handleSubmit called");
+    uiLogger.info({ text }, 'handleSubmit called');
 
     // Handle slash commands
-    if (text.startsWith("/")) {
-      uiLogger.debug({ text }, "Processing slash command");
+    if (text.startsWith('/')) {
+      uiLogger.debug({ text }, 'Processing slash command');
       handleSlashCommand(text);
       return;
     }
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
-      role: "user",
+      role: 'user',
       content: text,
     };
-    uiLogger.debug({ messageId: userMessage.id }, "Adding user message");
+    uiLogger.debug({ messageId: userMessage.id }, 'Adding user message');
     setMessages((prev) => [...prev, userMessage]);
     setIsProcessing(true);
-    setStatus("Thinking...");
+    setStatus('Thinking...');
 
     const assistantMessageId = crypto.randomUUID();
     const parts: MessagePart[] = [];
@@ -142,8 +142,8 @@ function AppContent() {
       ...prev,
       {
         id: assistantMessageId,
-        role: "assistant",
-        content: "",
+        role: 'assistant',
+        content: '',
         isStreaming: true,
         parts: [],
       },
@@ -153,14 +153,14 @@ function AppContent() {
       // Direct ADK invocation via hook
       for await (const event of agent.run(text)) {
         switch (event.type) {
-          case "text":
+          case 'text':
             if (event.content) {
               // Append to last text part or create new one
               const lastPart = parts[parts.length - 1];
-              if (lastPart && lastPart.type === "text") {
+              if (lastPart && lastPart.type === 'text') {
                 lastPart.content += event.content;
               } else {
-                parts.push({ type: "text", content: event.content });
+                parts.push({ type: 'text', content: event.content });
               }
               setMessages((prev) =>
                 prev.map((msg) =>
@@ -176,27 +176,25 @@ function AppContent() {
             }
             break;
 
-          case "tool_start":
+          case 'tool_start':
             if (event.toolCallId && event.toolName) {
               const newToolCall: ToolCall = {
                 id: event.toolCallId,
                 name: event.toolName,
-                status: "running",
+                status: 'running',
               };
               toolCallMap.set(event.toolCallId, newToolCall);
-              parts.push({ type: "tool_call", toolCall: newToolCall });
+              parts.push({ type: 'tool_call', toolCall: newToolCall });
               setStatus(`Running: ${event.toolName}`);
               setMessages((prev) =>
                 prev.map((msg) =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, parts: [...parts] }
-                    : msg
+                  msg.id === assistantMessageId ? { ...msg, parts: [...parts] } : msg
                 )
               );
             }
             break;
 
-          case "tool_args":
+          case 'tool_args':
             if (event.toolCallId && event.toolArgs) {
               const tc = toolCallMap.get(event.toolCallId);
               if (tc) {
@@ -207,45 +205,39 @@ function AppContent() {
                 }
                 setMessages((prev) =>
                   prev.map((msg) =>
-                    msg.id === assistantMessageId
-                      ? { ...msg, parts: [...parts] }
-                      : msg
+                    msg.id === assistantMessageId ? { ...msg, parts: [...parts] } : msg
                   )
                 );
               }
             }
             break;
 
-          case "tool_end":
+          case 'tool_end':
             if (event.toolCallId) {
               const tc = toolCallMap.get(event.toolCallId);
               if (tc) {
-                tc.status = "completed";
+                tc.status = 'completed';
                 setMessages((prev) =>
                   prev.map((msg) =>
-                    msg.id === assistantMessageId
-                      ? { ...msg, parts: [...parts] }
-                      : msg
+                    msg.id === assistantMessageId ? { ...msg, parts: [...parts] } : msg
                   )
                 );
               }
             }
             break;
 
-          case "transfer":
+          case 'transfer':
             if (event.transferTo) {
               setStatus(`Agent: ${event.transferTo}`);
               setMessages((prev) =>
                 prev.map((msg) =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, agentName: event.transferTo }
-                    : msg
+                  msg.id === assistantMessageId ? { ...msg, agentName: event.transferTo } : msg
                 )
               );
             }
             break;
 
-          case "error":
+          case 'error':
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantMessageId
@@ -263,21 +255,18 @@ function AppContent() {
 
       // Mark any remaining running tool calls as completed
       for (const tc of toolCallMap.values()) {
-        if (tc.status === "running") {
-          tc.status = "completed";
+        if (tc.status === 'running') {
+          tc.status = 'completed';
         }
       }
 
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === assistantMessageId
-            ? { ...msg, isStreaming: false, parts: [...parts] }
-            : msg
+          msg.id === assistantMessageId ? { ...msg, isStreaming: false, parts: [...parts] } : msg
         )
       );
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessageId
@@ -287,14 +276,15 @@ function AppContent() {
       );
     } finally {
       setIsProcessing(false);
-      setStatus("Ready");
+      setStatus('Ready');
     }
   };
 
-  if (screen === "settings") {
-    return <SettingsScreen onClose={() => setScreen("chat")} />;
-  } else if (screen === "help") {
-    return <HelpScreen onClose={() => setScreen("chat")} />;
+  if (screen === 'settings') {
+    return <SettingsScreen onClose={() => setScreen('chat')} />;
+  }
+  if (screen === 'help') {
+    return <HelpScreen onClose={() => setScreen('chat')} />;
   }
 
   return (
@@ -307,9 +297,7 @@ function AppContent() {
         onSubmit={handleSubmit}
         isDisabled={isProcessing}
         placeholder={
-          isProcessing
-            ? "Waiting for response..."
-            : "Ask the agent... (type /help for commands)"
+          isProcessing ? 'Waiting for response...' : 'Ask the agent... (type /help for commands)'
         }
       />
       <StatusBar isLoading={isProcessing} status={status} />

@@ -1,4 +1,3 @@
-
 /**
  * Settings Loader
  *
@@ -9,15 +8,15 @@
  * Dependencies:
  * - yaml: YAML parser for reading configuration files
  */
-import { readFileSync, writeFileSync, existsSync, copyFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
-  AppSettingsSchema,
-  type AppSettings,
-  type ModelConfig,
-  type AgentName,
   AGENT_NAMES,
+  type AgentName,
+  type AppSettings,
+  AppSettingsSchema,
+  type ModelConfig,
 } from './schema.js';
 
 const DEFAULT_SETTINGS_FILENAME = 'app_settings.yaml';

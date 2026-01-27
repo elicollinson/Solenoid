@@ -1,3 +1,4 @@
+import { BarChart, LineGraph, Sparkline, StackedBarChart } from '@pppp606/ink-chart';
 /**
  * Chart Renderer Component
  *
@@ -10,13 +11,12 @@
  * - Charts appear inline in the message flow
  */
 import { Box, Text } from 'ink';
-import { BarChart, StackedBarChart, LineGraph, Sparkline } from '@pppp606/ink-chart';
 import { parseChartArgs } from '../../charts/index.js';
 import type {
   BarChartConfig,
-  StackedBarChartConfig,
   LineGraphConfig,
   SparklineConfig,
+  StackedBarChartConfig,
 } from '../../charts/types.js';
 
 interface ChartRendererProps {
@@ -29,7 +29,18 @@ interface ChartRendererProps {
 function mapColor(color: string | undefined): string | undefined {
   if (!color) return undefined;
   // ink supports these color names directly
-  const validColors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'gray', 'grey'];
+  const validColors = [
+    'black',
+    'red',
+    'green',
+    'yellow',
+    'blue',
+    'magenta',
+    'cyan',
+    'white',
+    'gray',
+    'grey',
+  ];
   if (validColors.includes(color.toLowerCase())) {
     return color.toLowerCase();
   }
@@ -49,7 +60,9 @@ function RenderBarChart({ config }: { config: BarChartConfig }) {
   return (
     <Box flexDirection="column">
       {config.title && (
-        <Text bold color="cyan">{config.title}</Text>
+        <Text bold color="cyan">
+          {config.title}
+        </Text>
       )}
       <Box marginTop={config.title ? 1 : 0}>
         <BarChart
@@ -76,7 +89,9 @@ function RenderStackedBarChart({ config }: { config: StackedBarChartConfig }) {
   return (
     <Box flexDirection="column">
       {config.title && (
-        <Text bold color="cyan">{config.title}</Text>
+        <Text bold color="cyan">
+          {config.title}
+        </Text>
       )}
       <Box marginTop={config.title ? 1 : 0}>
         <StackedBarChart
@@ -109,12 +124,16 @@ function RenderLineGraph({ config }: { config: LineGraphConfig }) {
   return (
     <Box flexDirection="column">
       {config.title && (
-        <Text bold color="cyan">{config.title}</Text>
+        <Text bold color="cyan">
+          {config.title}
+        </Text>
       )}
       {legendItems.length > 0 && (
         <Box marginTop={config.title ? 1 : 0} gap={2}>
           {legendItems.map((item, i) => (
-            <Text key={i} color={item.color}>● {item.label}</Text>
+            <Text key={i} color={item.color}>
+              ● {item.label}
+            </Text>
           ))}
         </Box>
       )}
@@ -138,7 +157,9 @@ function RenderSparkline({ config }: { config: SparklineConfig }) {
   return (
     <Box flexDirection="column">
       {config.title && (
-        <Text bold color="cyan">{config.title}: </Text>
+        <Text bold color="cyan">
+          {config.title}:{' '}
+        </Text>
       )}
       <Box>
         <Sparkline

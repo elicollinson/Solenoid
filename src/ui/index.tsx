@@ -1,3 +1,4 @@
+import { LogLevel, setLogLevel } from '@google/adk';
 /**
  * UI Entry Point
  *
@@ -8,9 +9,8 @@
  * - ink: React for CLIs - builds terminal UIs with React components
  */
 import { render } from 'ink';
-import { setLogLevel, LogLevel } from '@google/adk';
+import { setupErrorHandlers, uiLogger } from '../utils/logger.js';
 import { App } from './app.js';
-import { uiLogger, setupErrorHandlers } from '../utils/logger.js';
 
 // Suppress ADK console logs - set to higher than ERROR (3) to suppress all
 // Must be called before any ADK code runs

@@ -53,7 +53,10 @@ export function createRunErrorEvent(runId: string, message: string, code?: strin
 /**
  * Create a TEXT_MESSAGE_START event
  */
-export function createTextMessageStartEvent(messageId: string, role: 'assistant' | 'user' = 'assistant') {
+export function createTextMessageStartEvent(
+  messageId: string,
+  role: 'assistant' | 'user' = 'assistant'
+) {
   return {
     type: EventType.TEXT_MESSAGE_START,
     messageId,
@@ -129,11 +132,7 @@ export function createToolCallEndEvent(toolCallId: string) {
 /**
  * Create a TOOL_CALL_RESULT event
  */
-export function createToolCallResultEvent(
-  toolCallId: string,
-  result: string,
-  error?: string
-) {
+export function createToolCallResultEvent(toolCallId: string, result: string, error?: string) {
   return {
     type: EventType.TOOL_CALL_RESULT,
     toolCallId,
@@ -188,11 +187,7 @@ export function encodeSSEEvent(event: { type: EventType } & Record<string, unkno
 /**
  * Convert internal tool call to AG-UI format
  */
-export function toAgUiToolCall(
-  toolCallId: string,
-  name: string,
-  args: Record<string, unknown>
-) {
+export function toAgUiToolCall(toolCallId: string, name: string, args: Record<string, unknown>) {
   return {
     id: toolCallId,
     type: 'function' as const,

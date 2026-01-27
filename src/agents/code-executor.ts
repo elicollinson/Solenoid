@@ -16,9 +16,10 @@
  * - pyodide: WebAssembly Python runtime for secure sandboxed execution
  */
 import { LlmAgent } from '@google/adk';
-import { getAgentPrompt, loadSettings, getAdkModelName } from '../config/index.js';
-import { executeCodeAdkTool } from '../tools/adk-tools.js';
+import type { AppSettings } from '../config/index.js';
+import { getAdkModelName, getAgentPrompt, loadSettings } from '../config/index.js';
 import { saveMemoriesOnFinalResponse } from '../memory/callbacks.js';
+import { executeCodeAdkTool } from '../tools/adk-tools.js';
 import { executeCode } from '../tools/code-execution.js';
 
 // Re-export executeCode for backward compatibility
@@ -69,20 +70,16 @@ Python standard library including:
 - ALWAYS use print() to output results`;
 
 // Load settings with fallback
-let settings;
+let settings: AppSettings | null;
 try {
   settings = loadSettings();
 } catch {
   settings = null;
 }
 
-const modelName = settings
-  ? getAdkModelName('code_executor_agent', settings)
-  : 'gemini-2.5-flash';
+const modelName = settings ? getAdkModelName('code_executor_agent', settings) : 'gemini-2.5-flash';
 
-const customPrompt = settings
-  ? getAgentPrompt('code_executor_agent', settings)
-  : undefined;
+const customPrompt = settings ? getAgentPrompt('code_executor_agent', settings) : undefined;
 
 /**
  * Code Executor LlmAgent - Python execution specialist
@@ -90,7 +87,8 @@ const customPrompt = settings
 export const codeExecutorAgent = new LlmAgent({
   name: 'code_executor_agent',
   model: modelName,
-  description: 'Python code execution specialist for calculations, algorithms, and data processing.',
+  description:
+    'Python code execution specialist for calculations, algorithms, and data processing.',
   instruction: customPrompt ?? DEFAULT_INSTRUCTION,
   tools: [executeCodeAdkTool],
   afterModelCallback: saveMemoriesOnFinalResponse,
@@ -106,5 +104,5 @@ export const codeExecutorToolExecutors: Record<
   string,
   (args: Record<string, unknown>) => Promise<string>
 > = {
-  execute_code: async (args) => executeCode(args['code'] as string),
+  execute_code: async (args) => executeCode(args.code as string),
 };

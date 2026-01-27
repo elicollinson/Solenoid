@@ -3,7 +3,7 @@
  *
  * Type definitions for the Solenoid testing infrastructure.
  */
-import type { Message, ToolCall, MessagePart } from '../components/index.js';
+import type { Message, MessagePart, ToolCall } from '../components/index.js';
 import type { AgentEvent } from '../hooks/useAgent.js';
 
 /**

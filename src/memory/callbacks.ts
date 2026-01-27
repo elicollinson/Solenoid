@@ -9,9 +9,9 @@
  * - @google/adk: CallbackContext, LlmRequest, LlmResponse for callback types
  */
 import type { CallbackContext, LlmRequest, LlmResponse } from '@google/adk';
-import { getMemoryService, type MemoryService } from './service.js';
-import type { SearchResult } from './schema.js';
 import { agentLogger } from '../utils/logger.js';
+import type { SearchResult } from './schema.js';
+import { type MemoryService, getMemoryService } from './service.js';
 
 const DEFAULT_APP_NAME = 'solenoid';
 const DEFAULT_USER_ID = 'default';

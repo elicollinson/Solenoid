@@ -13,8 +13,7 @@ export async function readWebpage(url: string): Promise<string> {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (compatible; Solenoid/2.0; +https://github.com/solenoid)',
+        'User-Agent': 'Mozilla/5.0 (compatible; Solenoid/2.0; +https://github.com/solenoid)',
       },
     });
 
@@ -26,7 +25,7 @@ export async function readWebpage(url: string): Promise<string> {
     const text = extractTextFromHtml(html);
 
     if (text.length > MAX_CONTENT_LENGTH) {
-      return text.substring(0, MAX_CONTENT_LENGTH) + '\n\n[Content truncated...]';
+      return `${text.substring(0, MAX_CONTENT_LENGTH)}\n\n[Content truncated...]`;
     }
 
     return text;
@@ -63,7 +62,7 @@ function extractTextFromHtml(html: string): string {
     .join('\n');
 
   // Collapse multiple spaces
-  text = text.replace(/  +/g, ' ');
+  text = text.replace(/ {2,}/g, ' ');
 
   return text.trim();
 }

@@ -7,7 +7,7 @@
  * Dependencies:
  * - pyodide: WebAssembly Python runtime for secure sandboxed execution
  */
-import { getPythonSandbox, type ExecutionResult } from '../sandbox/index.js';
+import { type ExecutionResult, getPythonSandbox } from '../sandbox/index.js';
 
 /**
  * Execute Python code in the WASM sandbox
@@ -35,11 +35,11 @@ function formatExecutionResult(result: ExecutionResult): string {
   parts.push(`## Execution ${result.outcome === 'success' ? 'Succeeded' : 'Failed'}`);
 
   if (result.stdout) {
-    parts.push('\n### Output\n```\n' + result.stdout + '\n```');
+    parts.push(`\n### Output\n\`\`\`\n${result.stdout}\n\`\`\``);
   }
 
   if (result.stderr) {
-    parts.push('\n### Errors\n```\n' + result.stderr + '\n```');
+    parts.push(`\n### Errors\n\`\`\`\n${result.stderr}\n\`\`\``);
   }
 
   const fileNames = Object.keys(result.outputFiles);
@@ -47,7 +47,7 @@ function formatExecutionResult(result: ExecutionResult): string {
     parts.push('\n### Generated Files');
     for (const name of fileNames) {
       const content = result.outputFiles[name]!;
-      const preview = content.length > 500 ? content.substring(0, 500) + '...' : content;
+      const preview = content.length > 500 ? `${content.substring(0, 500)}...` : content;
       parts.push(`\n**${name}**\n\`\`\`\n${preview}\n\`\`\``);
     }
   }
