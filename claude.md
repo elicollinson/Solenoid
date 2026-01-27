@@ -23,7 +23,7 @@ Or use the Claude Code CLI with the code-simplifier plugin enabled.
 Execute the test suite to ensure all tests pass:
 
 ```bash
-poetry run pytest tests/
+bun test
 ```
 
 ### 3. Functional Testing with Agent Harness
@@ -31,7 +31,7 @@ poetry run pytest tests/
 Use the agent harness to functionally test your changes before pushing:
 
 ```bash
-poetry run python -m tests.eval.run_eval
+bun test tests/e2e/harness-integration.test.tsx
 ```
 
 ## Verification Checklist
