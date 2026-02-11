@@ -1,0 +1,1280 @@
+manifest:
+  version: "0.1.3"
+  schema: https://a2as.org/cert/schema
+  subject:
+    name: elicollinson/solenoid
+    source: https://github.com/elicollinson/solenoid
+    branch: main
+    commit: "dc1d0936"
+    scope: [app/__init__.py, app/agent/callbacks/memory.py, app/agent/chart_generator_agent/agent.py, app/agent/client/__init__.py,
+      app/agent/code_executor_agent/__init__.py, app/agent/code_executor_agent/agent.py, app/agent/config.py, app/agent/local_execution/adk_wrapper.py,
+      app/agent/mcp_agent/agent.py, app/agent/memory/adk_sqlite_memory.py, app/agent/memory/extractor.py, app/agent/memory/ingestion.py,
+      app/agent/memory/memory_tools.py, app/agent/memory/search.py, app/agent/models/factory.py, app/agent/planning_agent/agent.py,
+      app/agent/planning_agent/generic_executor.py, app/agent/prime_agent/agent.py, app/agent/prime_agent/user_proxy.py, app/agent/research_agent/agent.py,
+      app/agent/search/universal_search.py, app/agent/search/web_retrieval.py, app/settings/validator.py, app/ui/agent_app.py,
+      app/ui/chat_input/__init__.py, app/ui/message_list/__init__.py]
+  issued:
+    by: A2AS.org
+    at: '2026-02-11T17:01:41Z'
+    url: https://a2as.org/certified/agents/elicollinson/solenoid
+  signatures:
+    digest: sha256:_BiBZObhOVJme7ia_GhcZi-vJOJayAktdG6qqMJ8LaA
+    key: ed25519:K4E6HBs0j5DgQsMnCIGjEkz4WhwHeCDVS92NAn1ZWks
+    sig: ed25519:K6TbCoFATI5JmqdrmT2pDINZHVAHwYh2cuPka8rfwTlT5FFUnj6XF-mkLR_BHFrKPZLTFYnjz-x955kAmt4dAw
+
+agents:
+  agent.0:
+    type: instance
+    models: [get_model]
+    params:
+      name: code_executor_agent
+      instruction: CODE_EXECUTOR_PROMPT
+      code_executor: secure_executor
+      after_model_callback: [save_memories_on_final_response]
+      disallow_transfer_to_peers: "True"
+      disallow_transfer_to_parent: "True"
+      instance: agent
+  agent.1:
+    type: instance
+    models: [get_model]
+    params:
+      name: user_proxy_agent
+      instruction: get_dynamic_instruction
+      before_model_callback: [capture_user_query, inject_memories]
+      after_model_callback: [save_memories_on_final_response]
+      instance: agent
+      sub_agents: [prime_agent]
+  agent.2:
+    type: instance
+    models: [get_model]
+    params:
+      name: prime_agent
+      instruction: PRIME_AGENT_PROMPT
+      after_model_callback: [save_memories_on_final_response]
+      instance: agent
+      sub_agents: [planning_agent]
+  agent.3:
+    type: instance
+    models: [get_model]
+    params:
+      name: generic_executor_agent
+      instruction: GENERIC_EXECUTOR_PROMPT
+      after_model_callback: [save_memories_on_final_response]
+      disallow_transfer_to_peers: "True"
+      disallow_transfer_to_parent: "True"
+      instance: agent
+  agent.4:
+    type: instance
+    models: [get_model]
+    params:
+      name: chart_generator_agent
+      instruction: CHART_GENERATOR_PROMPT
+      code_executor: secure_executor
+      after_model_callback: [save_memories_on_final_response]
+      disallow_transfer_to_peers: "True"
+      disallow_transfer_to_parent: "True"
+      instance: agent
+  agent.5:
+    type: instance
+    models: [get_model]
+    params:
+      name: planning_agent
+      instruction: get_dynamic_instruction
+      after_model_callback: [save_memories_on_final_response]
+      instance: agent
+      sub_agents: [code_executor_agent, chart_generator_agent, research_agent, generic_executor_agent, mcp_agent]
+  agent.6:
+    type: instance
+    models: [get_model]
+    tools: [search_tool, read_webpage_tool]
+    params:
+      name: research_agent
+      instruction: RESEARCH_AGENT_PROMPT
+      after_model_callback: [save_memories_on_final_response]
+      disallow_transfer_to_peers: "True"
+      disallow_transfer_to_parent: "True"
+      instance: agent
+  agent.ADKClient.agent:
+    type: class
+    models: [get_granite_model]
+    params:
+      name: helper
+      instruction: instruction
+      class: ADKClient
+  mcp_agent:
+    type: instance
+    models: [get_model]
+    tools: [_mcp_toolsets]
+    params:
+      name: mcp_agent
+      instruction: MCP_AGENT_PROMPT
+      disallow_transfer_to_peers: "True"
+      disallow_transfer_to_parent: "True"
+      before_model_callback: log_tools_before_model
+      after_model_callback: [save_memories_on_final_response]
+  memory_agent:
+    type: instance
+    models: [gemma2-2b-it]
+    tools: [StoreMemoryTool, RetrieveMemoryTool, load_memory]
+    params:
+      name: MemoryAgent
+      instruction: [You manage the user's long-term memory. Use store_memory to persist facts and retrieve_memory to answer
+          questions about prior preferences or episodes.]
+
+models:
+  gemma2-2b-it:
+    type: literal
+    agents: [memory_agent]
+  get_granite_model:
+    type: function
+    agents: [agent.ADKClient.agent]
+    params:
+      wrapper: get_granite_model
+  get_model:
+    type: function
+    agents: [mcp_agent, agent.0, agent.1, agent.2, agent.3, agent.4, agent.5, agent.6]
+    params:
+      wrapper: get_model
+      arg_0: mcp_agent
+
+tools:
+  _mcp_toolsets:
+    type: function
+    agents: [mcp_agent]
+    params:
+      dynamic: "True"
+  load_memory:
+    type: function
+    agents: [memory_agent]
+  read_webpage_tool:
+    type: function
+    agents: [agent.6]
+  RetrieveMemoryTool:
+    type: function
+    agents: [memory_agent]
+  search_tool:
+    type: function
+    agents: [agent.6]
+  StoreMemoryTool:
+    type: function
+    agents: [memory_agent]
+
+mcp:
+  command:
+    type: process
+    params:
+      class: McpToolset
+      connection_type: StdioConnectionParams
+      command: command
+      args: resolved_args
+      function: load_mcp_toolsets_from_settings
+  McpToolset:
+    type: network
+    url: http://{...}:{...}/api/pull
+    params:
+      class: McpToolset
+      connection_type: StreamableHTTPConnectionParams
+      headers: headers
+      function: load_mcp_toolsets_from_settings
+
+teams:
+  agent.1:
+    type: hierarchy
+    agents: [agent.1, prime_agent]
+  agent.2:
+    type: hierarchy
+    agents: [agent.2, planning_agent]
+  agent.5:
+    type: hierarchy
+    agents: [agent.5, code_executor_agent, chart_generator_agent, research_agent, generic_executor_agent, mcp_agent]
+
+imports:
+  _PROJECT_ROOT: app.agent.config._PROJECT_ROOT
+  add_adk_fastapi_endpoint: ag_ui_adk.add_adk_fastapi_endpoint
+  ADKAgent: ag_ui_adk.ADKAgent
+  ADKLocalWasmExecutor: app.agent.local_execution.adk_wrapper.ADKLocalWasmExecutor
+  Agent: google.adk.agents.Agent
+  AgentApp: app.ui.agent_app.AgentApp
+  AGUIStreamClient: app.ui.agui.AGUIStreamClient
+  annotations: __future__.annotations
+  Any: typing.Any
+  App: textual.app.App
+  asynccontextmanager: contextlib.asynccontextmanager
+  asyncio: asyncio
+  BACKEND_HOST: resources.backend_config.BACKEND_HOST
+  BACKEND_PORT: resources.backend_config.BACKEND_PORT
+  base64: base64
+  BaseCodeExecutor: google.adk.code_executors.BaseCodeExecutor
+  BaseMemoryService: google.adk.memory.BaseMemoryService
+  BeautifulSoup: bs4.BeautifulSoup
+  Binding: textual.binding.Binding
+  Callable: typing.Callable
+  CallbackContext: google.adk.agents.callback_context.CallbackContext
+  chart_generator_agent: app.agent.chart_generator_agent.agent.chart_generator_agent
+  ChatInput: app.ui.chat_input.ChatInput
+  clear_settings_cache: app.agent.config.clear_settings_cache
+  code_executor_agent: app.agent.code_executor_agent.agent.code_executor_agent
+  CodeExecutionResult: google.adk.code_executors.code_execution_utils.CodeExecutionResult
+  ComposeResult: textual.app.ComposeResult
+  Config: wasmtime.Config
+  connect_db: ingestion.connect_db
+  Container: textual.containers.Container
+  Content: google.genai.types.Content
+  CORSMiddleware: fastapi.middleware.cors.CORSMiddleware
+  create_backend_server: app.server.manager.create_backend_server
+  create_universal_search_tool: app.agent.search.universal_search.create_universal_search_tool
+  dataclass: dataclasses.dataclass
+  DEFAULT_RERANKER: rerank.DEFAULT_RERANKER
+  DEFAULT_SETTINGS: resources.default_settings.DEFAULT_SETTINGS
+  Engine: wasmtime.Engine
+  ensure_model_available: app.agent.ollama.ollama_app.ensure_model_available
+  events: textual.events
+  EventType: app.ui.agui.EventType
+  FastAPI: fastapi.FastAPI
+  fastapi_app: app.server.main.app
+  field: dataclasses.field
+  File: google.adk.code_executors.code_execution_utils.File
+  Final: typing.Final
+  FlagReranker: FlagEmbedding.FlagReranker
+  Footer: textual.widgets.Footer
+  FunctionTool: google.adk.tools.function_tool.FunctionTool
+  generic_executor_agent: app.agent.planning_agent.generic_executor.generic_executor_agent
+  get_agent_prompt: app.agent.config.get_agent_prompt
+  get_embedding_config: app.agent.config.get_embedding_config
+  get_granite_model: app.agent.models.granite.get_granite_model
+  get_model: app.agent.models.factory.get_model
+  Header: textual.widgets.Header
+  HEALTH_CHECK_INTERVAL: resources.backend_config.HEALTH_CHECK_INTERVAL
+  HEALTH_CHECK_TIMEOUT: resources.backend_config.HEALTH_CHECK_TIMEOUT
+  HEALTH_CHECK_URL: resources.backend_config.HEALTH_CHECK_URL
+  HOME_SETTINGS_PATH: resources.backend_config.HOME_SETTINGS_PATH
+  httpx: httpx
+  inject_memories: app.agent.callbacks.memory.inject_memories
+  InMemorySessionService: google.adk.sessions.InMemorySessionService
+  Iterable: typing.Iterable
+  json: json
+  Linker: wasmtime.Linker
+  List: typing.List
+  LiteLlm: google.adk.models.lite_llm.LiteLlm
+  litellm: litellm
+  llm_extractor: app.agent.memory.extractor.llm_extractor
+  LlmRequest: google.adk.models.lite_llm.LlmRequest
+  load_memory: google.adk.tools.load_memory_tool.load_memory
+  load_settings: app.agent.config.load_settings
+  LoadingIndicator: textual.widgets.LoadingIndicator
+  logging: logging
+  lru_cache: functools.lru_cache
+  Markdown: textual.widgets.Markdown
+  mcp_agent: app.agent.mcp_agent.agent.mcp_agent
+  McpToolset: google.adk.tools.mcp_tool.McpToolset
+  MemoryRow: search.MemoryRow
+  Message: textual.message.Message
+  MessageList: app.ui.message_list.MessageList
+  mimetypes: mimetypes
+  Module: wasmtime.Module
+  np: numpy
+  OLLAMA_HOST: resources.backend_config.OLLAMA_HOST
+  OLLAMA_PORT: resources.backend_config.OLLAMA_PORT
+  OllamaEmbedder: ollama_embeddings.OllamaEmbedder
+  'on': textual.on
+  Optional: typing.Optional
+  os: os
+  Part: google.genai.types.Part
+  Path: pathlib.Path
+  planning_agent: app.agent.planning_agent.agent.planning_agent
+  prime_agent: agent.agent
+  PrivateAttr: pydantic.PrivateAttr
+  read_webpage_tool: app.agent.search.web_retrieval.read_webpage_tool
+  requests: requests
+  rerank_texts: rerank.rerank_texts
+  research_agent: app.agent.research_agent.agent.research_agent
+  root_agent: app.agent.prime_agent.user_proxy.root_agent
+  RunFinishedEvent: app.ui.agui.RunFinishedEvent
+  Runner: google.adk.runners.Runner
+  RunStartedEvent: app.ui.agui.RunStartedEvent
+  save_memories_on_final_response: app.agent.callbacks.memory.save_memories_on_final_response
+  search_memories: search.search_memories
+  Sequence: typing.Sequence
+  serialize_float32: sqlite_vec.serialize_float32
+  Session: google.adk.sessions.Session
+  SettingsManager: app.settings.manager.SettingsManager
+  SettingsScreen: app.ui.settings.SettingsScreen
+  SettingsValidator: app.settings.validator.SettingsValidator
+  shutil: shutil
+  signal: signal
+  sqlite3: sqlite3
+  sqlite_vec: sqlite_vec
+  SqliteMemoryService: adk_sqlite_memory.SqliteMemoryService
+  start_ollama_server: app.agent.ollama.ollama_app.start_ollama_server
+  Static: textual.widgets.Static
+  StdioConnectionParams: google.adk.tools.mcp_tool.mcp_session_manager.StdioConnectionParams
+  StdioServerParameters: mcp.StdioServerParameters
+  Store: wasmtime.Store
+  StreamableHTTPConnectionParams: google.adk.tools.mcp_tool.mcp_session_manager.StreamableHTTPConnectionParams
+  subprocess: subprocess
+  sys: sys
+  tarfile: tarfile
+  TextArea: textual.widgets.TextArea
+  TextMessageContentEvent: app.ui.agui.TextMessageContentEvent
+  TextMessageEndEvent: app.ui.agui.TextMessageEndEvent
+  TextMessageStartEvent: app.ui.agui.TextMessageStartEvent
+  ThreadPoolExecutor: concurrent.futures.ThreadPoolExecutor
+  time: time
+  ToolCallArgsEvent: app.ui.agui.ToolCallArgsEvent
+  ToolCallEndEvent: app.ui.agui.ToolCallEndEvent
+  ToolCallResultEvent: app.ui.agui.ToolCallResultEvent
+  ToolCallStartEvent: app.ui.agui.ToolCallStartEvent
+  types: google.genai.types
+  upsert_memory: ingestion.upsert_memory
+  uuid: uuid
+  uvicorn: uvicorn
+  ValidationError: app.settings.validator.ValidationError
+  ValidationResult: app.settings.validator.ValidationResult
+  VerticalScroll: textual.containers.VerticalScroll
+  WasiConfig: wasmtime.WasiConfig
+  WasmEngine: app.agent.local_execution.wasm_engine.WasmEngine
+  which: shutil.which
+  work: textual.work
+  yaml: yaml
+
+functions:
+  __bool__:
+    type: sync
+    module: app.settings.validator
+    args: [self]
+    params:
+      returns: bool
+  __del__:
+    type: sync
+    module: app.agent.memory.ollama_embeddings
+    args: [self]
+    params:
+      returns: None
+  __init__:
+    type: sync
+    module: app.ui.message_list
+    args: [self]
+    params:
+      returns: None
+  __str__:
+    type: sync
+    module: app.settings.validator
+    args: [self]
+    params:
+      returns: str
+  _advance_spinner:
+    type: sync
+    module: app.ui.message_list
+    args: [self]
+    params:
+      returns: None
+  _check_model_exists:
+    type: sync
+    module: app.agent.ollama.ollama_app
+    args: [model_name, host, port]
+    params:
+      returns: bool
+  _embed:
+    type: sync
+    module: app.agent.memory.ollama_embeddings
+    args: [self, text]
+    params:
+      returns: np.ndarray
+  _ensure_embedder:
+    type: sync
+    module: app.agent.memory.ingestion
+    args: [embedder]
+    params:
+      returns: OllamaEmbedder
+  _extract_memories:
+    type: sync
+    module: app.agent.memory.adk_sqlite_memory
+    args: [self, session, tail]
+    params:
+      returns: Iterable[dict]
+  _extract_text_from_request:
+    type: sync
+    module: app.agent.callbacks.memory
+    args: [llm_request]
+    params:
+      returns: str
+  _format_args_detail:
+    type: sync
+    module: app.ui.message_list
+    args: [self]
+    params:
+      returns: str
+  _format_display:
+    type: sync
+    module: app.ui.message_list
+    args: [self]
+    params:
+      returns: str
+  _generate:
+    type: async
+    module: app.agent.memory.extractor
+  _get_bundled_ollama_path:
+    type: sync
+    module: app.agent.ollama.ollama_app
+    params:
+      returns: Optional[Path]
+  _get_conn:
+    type: sync
+    module: app.agent.memory.memory_tools
+    params:
+      returns: sqlite3.Connection
+  _get_default_embedder:
+    type: sync
+    module: app.agent.memory.search
+    params:
+      returns: OllamaEmbedder
+  _get_memory_service:
+    type: sync
+    module: app.agent.memory.memory_tools
+    params:
+      returns: SqliteMemoryService
+  _handle_command:
+    type: sync
+    module: app.ui.agent_app
+    args: [self, command, args]
+    params:
+      returns: None
+  _hybrid_candidates:
+    type: sync
+    module: app.agent.memory.search
+    args: [conn]
+    params:
+      returns: List[MemoryRow]
+  _is_final_response:
+    type: sync
+    module: app.agent.callbacks.memory
+    args: [llm_response]
+    params:
+      returns: bool
+  _is_ollama_up:
+    type: sync
+    module: app.agent.ollama.ollama_app
+    args: [host, port, timeout]
+    params:
+      returns: bool
+  _l2_normalize:
+    type: sync
+    module: app.agent.memory.ollama_embeddings
+    args: [vec]
+    params:
+      returns: np.ndarray
+  _load_api_key:
+    type: sync
+    module: app.agent.search.universal_search
+  _open_settings:
+    type: sync
+    module: app.ui.agent_app
+    args: [self]
+    params:
+      returns: None
+  _pull_model:
+    type: sync
+    module: app.agent.ollama.ollama_app
+    args: [model_name, host, port]
+  _row_from_record:
+    type: sync
+    module: app.agent.memory.search
+    args: [record]
+    params:
+      returns: MemoryRow
+  _row_to_part:
+    type: sync
+    module: app.agent.memory.adk_sqlite_memory
+    args: [text, score, row]
+    params:
+      returns: Part
+  _rrf:
+    type: sync
+    module: app.agent.memory.search
+    args: [rank]
+    params:
+      returns: float
+  _save_settings:
+    type: sync
+    module: app.settings.manager
+    args: [self, settings]
+    params:
+      returns: None
+  _set_loading:
+    type: sync
+    module: app.ui.agent_app
+    args: [self, is_loading]
+    params:
+      returns: None
+  _show_help:
+    type: sync
+    module: app.ui.agent_app
+    args: [self]
+    params:
+      returns: None
+  _stream_agent_response:
+    type: async
+    module: app.ui.agent_app
+    args: [self, user_text]
+    params:
+      returns: None
+  _tail_text:
+    type: sync
+    module: app.agent.memory.adk_sqlite_memory
+    args: [self, events]
+    params:
+      returns: str
+  _update_display:
+    type: sync
+    module: app.ui.message_list
+    args: [self]
+    params:
+      returns: None
+  _update_status:
+    type: sync
+    module: app.ui.agent_app
+    args: [self, text, state]
+    params:
+      returns: None
+  _validate_model_config:
+    type: sync
+    module: app.settings.validator
+    args: [model_config, path, errors]
+    params:
+      returns: None
+  action_clear:
+    type: sync
+    module: app.ui.agent_app
+    args: [self]
+    params:
+      returns: None
+  add:
+    type: sync
+    module: app.ui.message_list
+    args: [self, md, message_id]
+    params:
+      returns: StreamingMarkdown
+  add_session_to_memory:
+    type: async
+    module: app.agent.memory.adk_sqlite_memory
+    args: [self, session]
+    params:
+      returns: None
+  add_system_message:
+    type: sync
+    module: app.ui.message_list
+    args: [self, text]
+    params:
+      returns: StreamingMarkdown
+  add_tool_call_indicator:
+    type: sync
+    module: app.ui.message_list
+    args: [self, tool_name]
+    params:
+      returns: StreamingMarkdown
+  add_user_message:
+    type: sync
+    module: app.ui.message_list
+    args: [self, text]
+    params:
+      returns: StreamingMarkdown
+  append_args:
+    type: sync
+    module: app.ui.message_list
+    args: [self, args_delta]
+    params:
+      returns: None
+  append_content:
+    type: sync
+    module: app.ui.message_list
+    args: [self, delta]
+    params:
+      returns: None
+  append_to_message:
+    type: sync
+    module: app.ui.message_list
+    args: [self, message_id, delta]
+    params:
+      returns: None
+  apply_schema:
+    type: sync
+    module: app.agent.memory.ingestion
+    args: [conn, schema_path]
+    params:
+      returns: None
+  ask:
+    type: sync
+    module: app.agent.client
+    args: [self, prompt]
+    params:
+      returns: str
+  capture_user_query:
+    type: sync
+    module: app.agent.prime_agent.user_proxy
+    args: [callback_context, llm_request]
+  check_model_exists:
+    type: sync
+    module: main_bundled
+    args: [model_name]
+    params:
+      returns: bool
+  clear_settings_cache:
+    type: sync
+    module: app.agent.config
+  complete_tool_call:
+    type: sync
+    module: app.ui.message_list
+    args: [self, tool_call_id, result]
+    params:
+      returns: None
+  compose:
+    type: sync
+    module: app.ui.message_list
+    args: [self]
+  connect_db:
+    type: sync
+    module: app.agent.memory.ingestion
+    args: [path]
+    params:
+      returns: sqlite3.Connection
+  content:
+    type: sync
+    module: app.ui.message_list
+    args: [self]
+    params:
+      returns: str
+  create_universal_search_tool:
+    type: sync
+    module: app.agent.search.universal_search
+  embed_doc:
+    type: sync
+    module: app.agent.memory.ollama_embeddings
+    args: [self, text]
+    params:
+      returns: np.ndarray
+  embed_query:
+    type: sync
+    module: app.agent.memory.ollama_embeddings
+    args: [self, text]
+    params:
+      returns: np.ndarray
+  end_streaming_message:
+    type: sync
+    module: app.ui.message_list
+    args: [self, message_id]
+    params:
+      returns: None
+  ensure_model_available:
+    type: sync
+    module: app.agent.ollama.ollama_app
+    args: [model_name, host, port]
+  ensure_model_ready:
+    type: sync
+    module: main_bundled
+    params:
+      returns: bool
+  ensure_ollama_running:
+    type: sync
+    module: main_bundled
+    params:
+      returns: bool
+  ensure_settings_file:
+    type: sync
+    module: main_bundled
+    params:
+      returns: None
+  error_messages:
+    type: sync
+    module: app.settings.validator
+    args: [self]
+    params:
+      returns: list[str]
+  execute_code:
+    type: sync
+    module: app.agent.local_execution.adk_wrapper
+    args: [self, invocation_context, code_execution_input]
+    params:
+      returns: CodeExecutionResult
+  first_error:
+    type: sync
+    module: app.settings.validator
+    args: [self]
+    params:
+      returns: Optional[str]
+  get_agent_prompt:
+    type: sync
+    module: app.agent.config
+    args: [agent_name, default]
+    params:
+      returns: str
+  get_all_sections_info:
+    type: sync
+    module: app.settings.manager
+    args: [self]
+    params:
+      returns: list[SectionInfo]
+  get_configured_embedding_model:
+    type: sync
+    module: main_bundled
+    params:
+      returns: str
+  get_configured_model:
+    type: sync
+    module: main_bundled
+    params:
+      returns: str
+  get_dynamic_instruction:
+    type: sync
+    module: app.agent.planning_agent.agent
+  get_embedding_config:
+    type: sync
+    module: app.agent.config
+    params:
+      returns: dict
+  get_extraction_prompt:
+    type: sync
+    module: app.agent.memory.extractor
+    params:
+      returns: str
+  get_memory_service:
+    type: sync
+    module: app.agent.callbacks.memory
+    params:
+      returns: SqliteMemoryService
+  get_model:
+    type: sync
+    module: app.agent.models.factory
+    args: [role]
+    params:
+      returns: LiteLlm
+  get_reranker:
+    type: sync
+    module: app.agent.memory.rerank
+    args: [model_name]
+    params:
+      returns: FlagReranker
+  get_section:
+    type: sync
+    module: app.settings.manager
+    args: [self, key]
+    params:
+      returns: Any
+  get_section_as_yaml:
+    type: sync
+    module: app.settings.manager
+    args: [self, key]
+    params:
+      returns: str
+  get_section_info:
+    type: sync
+    module: app.settings.manager
+    args: [self, key]
+    params:
+      returns: SectionInfo
+  get_section_keys:
+    type: sync
+    module: app.settings.manager
+    args: [self]
+    params:
+      returns: list[str]
+  get_settings:
+    type: sync
+    module: app.settings.manager
+    args: [self]
+    params:
+      returns: dict
+  get_settings_manager:
+    type: sync
+    module: app.settings.manager
+    params:
+      returns: SettingsManager
+  health_check:
+    type: async
+    module: app.server.main
+  inject_memories:
+    type: sync
+    module: app.agent.callbacks.memory
+    args: [callback_context, llm_request]
+    params:
+      returns: None
+  lifespan:
+    type: async
+    module: app.server.main
+    args: [app]
+  llm_extractor:
+    type: sync
+    module: app.agent.memory.extractor
+    args: [session, tail_text]
+    params:
+      returns: Iterable[dict]
+  load_mcp_toolsets_from_settings:
+    type: sync
+    module: app.agent.mcp_agent.agent
+    args: [settings_path]
+  load_settings:
+    type: sync
+    module: app.agent.config
+    args: [config_path]
+    params:
+      returns: dict
+  log_tools_before_model:
+    type: async
+    module: app.agent.mcp_agent.agent
+    args: [callback_context, llm_request]
+  main:
+    type: sync
+    module: main_bundled
+    params:
+      returns: int
+  mark_complete:
+    type: sync
+    module: app.ui.message_list
+    args: [self, result]
+    params:
+      returns: None
+  on_chat_input_command:
+    type: sync
+    module: app.ui.agent_app
+    args: [self, msg]
+    params:
+      returns: None
+  on_chat_input_submitted:
+    type: sync
+    module: app.ui.agent_app
+    args: [self, msg]
+    params:
+      returns: None
+  on_key:
+    type: sync
+    module: app.ui.chat_input
+    args: [self, event]
+    params:
+      returns: None
+  on_mount:
+    type: sync
+    module: app.ui.message_list
+    args: [self]
+    params:
+      returns: None
+  on_settings_closed:
+    type: sync
+    module: app.ui.agent_app
+    args: [modified]
+    params:
+      returns: None
+  pull_model_with_progress:
+    type: sync
+    module: main_bundled
+    args: [model_name]
+    params:
+      returns: bool
+  read_webpage:
+    type: sync
+    module: app.agent.search.web_retrieval
+    args: [url]
+    params:
+      returns: str
+  register_validator:
+    type: sync
+    module: app.settings.validator
+    args: [cls, section_key, validator]
+    params:
+      returns: None
+  rerank_texts:
+    type: sync
+    module: app.agent.memory.rerank
+    params:
+      returns: list[tuple]
+  restore_backup:
+    type: sync
+    module: app.settings.manager
+    args: [self]
+    params:
+      returns: bool
+  retrieve_memory:
+    type: sync
+    module: app.agent.memory.memory_tools
+    args: [user_id, app_name, query, top_n]
+    params:
+      returns: str
+  root:
+    type: async
+    module: app.server.main
+  run:
+    type: sync
+    module: app.agent.local_execution.wasm_engine
+    args: [self, code, context_files, timeout_seconds]
+    params:
+      returns: dict
+  save_embedding:
+    type: sync
+    module: app.agent.memory.ollama_embeddings
+    args: [self, path, text]
+    params:
+      returns: None
+  save_memories_on_final_response:
+    type: async
+    module: app.agent.callbacks.memory
+    args: [callback_context, llm_response]
+    params:
+      returns: None
+  search_memories:
+    type: sync
+    module: app.agent.memory.search
+    args: [conn, query_text, user_id, app_name]
+    params:
+      returns: list[tuple]
+  search_memory:
+    type: async
+    module: app.agent.memory.adk_sqlite_memory
+    args: [self, query]
+    params:
+      returns: Content
+  set_args:
+    type: sync
+    module: app.ui.message_list
+    args: [self, args_json]
+    params:
+      returns: None
+  set_status:
+    type: sync
+    module: app.ui.agent_app
+    args: [self, text, state]
+    params:
+      returns: None
+  set_streaming:
+    type: sync
+    module: app.ui.message_list
+    args: [self, is_streaming]
+    params:
+      returns: None
+  setup_file_logging:
+    type: sync
+    module: main_bundled
+    params:
+      returns: None
+  signal_handler:
+    type: sync
+    module: main_bundled
+    args: [_signum, _frame]
+  start_ollama_server:
+    type: sync
+    module: app.agent.ollama.ollama_app
+    args: [host, port, models_dir, log_file, wait_seconds]
+  start_streaming_message:
+    type: sync
+    module: app.ui.message_list
+    args: [self, role, message_id]
+    params:
+      returns: StreamingMarkdown
+  start_tool_call:
+    type: sync
+    module: app.ui.message_list
+    args: [self, tool_call_id, tool_name]
+    params:
+      returns: ToolCallWidget
+  store_memory:
+    type: sync
+    module: app.agent.memory.memory_tools
+    args: [user_id, app_name, text, memory_type, importance, tags, ttl_ms]
+    params:
+      returns: str
+  suppress_console_logging:
+    type: sync
+    module: main_bundled
+    params:
+      returns: None
+  to_blob:
+    type: sync
+    module: app.agent.memory.ollama_embeddings
+    args: [vec]
+    params:
+      returns: bytes
+  universal_search:
+    type: sync
+    module: app.agent.search.universal_search
+    args: [query]
+    params:
+      returns: str
+  update_section:
+    type: sync
+    module: app.settings.manager
+    args: [self, key, yaml_string]
+    params:
+      returns: ValidationResult
+  update_tool_call_args:
+    type: sync
+    module: app.ui.message_list
+    args: [self, tool_call_id, args_delta]
+    params:
+      returns: None
+  upsert_kb_chunk:
+    type: sync
+    module: app.agent.memory.ingestion
+    args: [conn]
+    params:
+      returns: int
+  upsert_memory:
+    type: sync
+    module: app.agent.memory.ingestion
+    args: [conn]
+    params:
+      returns: int
+  validate_agent_prompts_section:
+    type: sync
+    module: app.settings.validator
+    args: [value, reference]
+    params:
+      returns: ValidationResult
+  validate_mcp_servers_section:
+    type: sync
+    module: app.settings.validator
+    args: [value, reference]
+    params:
+      returns: ValidationResult
+  validate_models_section:
+    type: sync
+    module: app.settings.validator
+    args: [value, reference]
+    params:
+      returns: ValidationResult
+  validate_search_section:
+    type: sync
+    module: app.settings.validator
+    args: [value, reference]
+    params:
+      returns: ValidationResult
+  validate_section:
+    type: sync
+    module: app.settings.validator
+    args: [cls, section_key, yaml_string, reference_settings]
+    params:
+      returns: ValidationResult
+  validate_structure:
+    type: sync
+    module: app.settings.validator
+    args: [cls, value, reference, path]
+    params:
+      returns: ValidationResult
+  validate_yaml_string:
+    type: sync
+    module: app.settings.validator
+    args: [cls, yaml_string, reference]
+    params:
+      returns: ValidationResult
+
+variables:
+  BRAVE_SEARCH_API_KEY:
+    type: env
+    params:
+      caller: [os.environ.get]
+      path: [app.agent.search.universal_search]
+
+files:
+  ../../:
+    type: pattern
+    actions: [read]
+    params:
+      caller: [os.path.join]
+      pattern: [os.path.dirname(), ../../]
+  ../../../:
+    type: pattern
+    actions: [read]
+    params:
+      caller: [os.path.join]
+      pattern: [_CURRENT_DIR, ../../../]
+  ./:
+    type: pattern
+    actions: [read]
+    params:
+      patterns: ['*']
+      caller: [run]
+  .ollama_bin:
+    type: literal
+    actions: [read]
+    params:
+      path: [_PROJECT_ROOT]
+  _BUNDLED_OLLAMA_DIR:
+    type: variable
+    actions: [write]
+    params:
+      caller: [_BUNDLED_OLLAMA_DIR.mkdir]
+  absolute_config_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [os.path.exists, open, yaml.safe_load]
+  absolute_settings_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [open, yaml.safe_load]
+      alias: [f]
+  APP_LOG_DIR:
+    type: variable
+    actions: [write]
+    params:
+      caller: [APP_LOG_DIR.mkdir]
+  APP_LOG_FILE:
+    type: variable
+    actions: [read]
+    params:
+      caller: [APP_LOG_FILE.read_text]
+  app_settings.yaml:
+    type: pattern
+    actions: [read]
+    params:
+      caller: [os.path.join]
+      pattern: [project_root, app_settings.yaml]
+  backup_path:
+    type: variable
+    actions: [write, read]
+    params:
+      caller: [open, os.path.exists]
+      alias: [f]
+  config_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [os.path.exists, open, yaml.safe_load, os.path.join]
+  db_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [Path]
+  DEFAULT_DB_PATH:
+    type: literal
+    actions: [read]
+    params:
+      caller: [Path(memories.db)]
+  file_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [file_path.read_text, file_path.read_bytes]
+  HOME_SETTINGS_PATH:
+    type: variable
+    actions: [write]
+    params:
+      caller: [HOME_SETTINGS_PATH.write_text]
+  log_file:
+    type: variable
+    actions: [read]
+    params:
+      caller: [open]
+  path:
+    type: variable
+    actions: [read, write]
+    params:
+      caller: [open, yaml.safe_load, path.write_bytes]
+      alias: [f]
+  SCHEMA_PATH:
+    type: literal
+    actions: [read]
+    params:
+      caller: [Path.with_name(schema.sql)]
+  script_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [script_path.read_text]
+  settings_path:
+    type: pattern
+    actions: [read]
+    params:
+      caller: [os.path.join]
+      pattern: [_PROJECT_ROOT, settings_path]
+  solenoid.log:
+    type: literal
+    actions: [read]
+    params:
+      path: [APP_LOG_DIR]
+  stderr.txt:
+    type: literal
+    actions: [read]
+    params:
+      caller: [run]
+      path: [temp_dir]
+  stderr_path:
+    type: variable
+    actions: [write, read]
+    params:
+      caller: [open, stderr_path.read_text]
+      alias: [f]
+  stdout.txt:
+    type: literal
+    actions: [read]
+    params:
+      caller: [run]
+      path: [temp_dir]
+  stdout_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [stdout_path.read_text]
+  temp_dir:
+    type: literal
+    actions: [read, write, delete]
+    params:
+      caller: ['Path(''temp_sandbox_{run_id}'')', temp_dir.mkdir, temp_dir.rglob, shutil.rmtree]
+  wasm_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [Path]
+
+networks:
+  api.search.brave.com:
+    type: api
+    actions: [GET, POST]
+    urls: [/res/v1/web/search]
+    protocols: [https]
+    ports: ["443"]
+    params:
+      caller: [universal_search, _is_ollama_up, _check_model_exists, _pull_model, read_webpage]
+  app:
+    type: api
+    actions: [GET]
+    protocols: [http]
+    ports: ["80"]
+    params:
+      caller: [main]
+      pattern: http://{BACKEND_HOST}:{BACKEND_PORT}
+  toolset:
+    type: api
+    actions: [GET]
+    protocols: [http]
+    ports: ["80"]
+    params:
+      caller: [load_mcp_toolsets_from_settings]
+      pattern: http://{...}:{...}/api/pull
+  url:
+    type: api
+    actions: [GET]
+    protocols: [http]
+    ports: ["80"]
+    params:
+      pattern: http://{host}:{port}/api/tags
+      caller: [_is_ollama_up, _check_model_exists]
+      dynamic: "True"
+      variable: url
+  url.1:
+    type: api
+    actions: [GET]
+    protocols: [http]
+    ports: ["80"]
+    params:
+      pattern: http://{host}:{port}/api/pull
+      caller: [_pull_model]
+      dynamic: "True"
+      variable: url
+  url.2:
+    type: api
+    actions: [GET]
+    protocols: [http]
+    ports: ["80"]
+    params:
+      pattern: http://{OLLAMA_HOST}:{OLLAMA_PORT}/api/pull
+      caller: [pull_model_with_progress]
+      dynamic: "True"
+      variable: url
